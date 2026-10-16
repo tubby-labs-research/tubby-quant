@@ -1,0 +1,2 @@
+# Consolidated Stooq table import (Parquet/CSV streaming); install into the isolated Qlib env.
+pyarrow==25.0.1

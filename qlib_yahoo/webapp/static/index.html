@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Tubby Alpha Lab · Qlib Validation</title>
+  <link rel="stylesheet" href="/static/app.css?v=workbench-cleanup-2026-10-14">
+  <link rel="stylesheet" href="/static/research.css?v=research-2026-10-10.1">
+</head>
+<body data-view="lab">
+<div class="shell" id="shell">
+  <!-- ============================================================ toolbar -->
+  <header class="toolbar">
+    <div class="brand" title="Tubby Qlib Console">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e3a8a"/><stop offset="1" stop-color="#0f766e"/></linearGradient></defs>
+        <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#lg)"/>
+        <path d="M14 45 L23 36 L31 40 L40 28 L50 19" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="50" cy="19" r="4.4" fill="#fbbf24" stroke="#fff" stroke-width="1.6"/>
+      </svg>
+      <span class="brand-name">Tubby Alpha Lab</span>
+    </div>
+    <div class="tb-group">
+      <button class="tb-field lab-only" id="tb-lab-dataset" title="Choose Alpha Lab trading prices (⌘D)" aria-label="Alpha Lab Trading prices">
+        <span class="tb-key">Trading prices</span><span class="tb-val" id="tb-lab-dataset-name">Choose prices…</span><svg class="chev" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3"/></svg>
+      </button>
+      <button class="tb-field research-only" id="tb-dataset" title="Choose Qlib Validation backtest prices (⌘D)" aria-label="Qlib Validation backtest prices">
+        <span class="tb-key">Backtest prices</span><span class="tb-val" id="tb-dataset-name">Choose prices…</span><svg class="chev" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3"/></svg>
+      </button>
+      <label class="tb-field select research-only" title="Universe">
+        <span class="tb-key">Universe</span><select id="universe" aria-label="Universe"></select><svg class="chev" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3"/></svg>
+      </label>
+      <div class="segmented research-only" id="mode" role="tablist" aria-label="Strategy">
+        <button data-mode="signed" role="tab" title="Long and short weights from the alpha">Signed</button>
+        <button data-mode="long-only" role="tab" title="Buy the top-k scores">Long-only</button>
+      </div>
+    </div>
+    <button class="btn" id="sec-open" title="Select common SEC inputs for Alpha Lab and Qlib Validation">SEC fields <span id="sec-count"></span></button>
+    <div class="tb-spacer"></div>
+    <button class="tb-command" id="palette-btn" title="Command palette">
+      <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><span>Search runs, commands, examples</span><kbd>⌘K</kbd>
+    </button>
+    <button class="icon-btn tb-toggle" id="toggle-inspector" title="Show or hide the settings panel (⌘I)" aria-label="Toggle settings panel"><svg viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.8"/><path d="M10 2.5v11"/></svg></button>
+    <button class="btn primary" id="run" title="Run (⌘R)"><svg viewBox="0 0 12 12"><path d="M3 2l7 4-7 4z"/></svg><span id="run-label">Simulate alphas</span><kbd>⌘R</kbd></button>
+    <button class="btn" id="cancel" title="Stop the running task (⌘.)" disabled><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1"/></svg>Stop</button>
+  </header>
+
+  <div class="body" id="body">
+    <!-- ========================================================== activity bar -->
+    <nav class="activitybar" aria-label="Views">
+      <button class="act active" data-view="lab" title="Alpha Lab (⌘2)" aria-label="Alpha Lab">
+        <svg viewBox="0 0 20 20"><path d="M7.5 2.5h5M8.5 2.5v5.2L4.2 15.3a1.5 1.5 0 001.3 2.2h9a1.5 1.5 0 001.3-2.2L11.5 7.7V2.5"/><path d="M5.8 12.5h8.4"/></svg><span class="act-label">Alpha Lab</span>
+      </button>
+      <button class="act" data-view="research" title="Qlib Validation · native expressions, next-open fills (⌘1)" aria-label="Qlib Validation">
+        <svg viewBox="0 0 20 20"><path d="M3 15.5l4.5-5 3.2 3 6.3-7.5"/><path d="M13.5 6h3.5v3.5"/></svg><span class="act-label">Validation</span>
+      </button>
+      <button class="act" data-view="data" title="Data (⌘3)" aria-label="Data">
+        <svg viewBox="0 0 20 20"><ellipse cx="10" cy="5" rx="6.5" ry="2.5"/><path d="M3.5 5v10c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5V5"/><path d="M3.5 10c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5"/></svg><span class="act-label">Data</span>
+      </button>
+      <button class="act" data-view="auto" title="Research (⌘4)" aria-label="Research">
+        <svg viewBox="0 0 20 20"><circle cx="5" cy="5" r="2"/><circle cx="15" cy="5" r="2"/><circle cx="10" cy="15" r="2"/><path d="M7 5h6M6 7l3 6M14 7l-3 6"/></svg><span class="act-label">Research</span>
+      </button>
+      <div class="act-spacer"></div>
+      <button class="act" id="toggle-bottom" title="Toggle panel (⌘J)" aria-label="Toggle panel">
+        <svg viewBox="0 0 20 20"><rect x="3" y="3.5" width="14" height="13" rx="2"/><path d="M3 12.5h14"/></svg>
+      </button>
+      <button class="act" id="open-folder" title="Show the data folder" aria-label="Data folder">
+        <svg viewBox="0 0 20 20"><path d="M2.5 6.5a2 2 0 012-2h3.2l1.6 1.8h6.2a2 2 0 012 2v6.2a2 2 0 01-2 2h-11a2 2 0 01-2-2z"/></svg>
+      </button>
+    </nav>
+
+    <!-- ========================================================== explorer -->
+    <aside class="explorer" id="explorer">
+      <div class="xview" data-view="research">
+        <div class="pane-head"><span>Runs</span>
+          <div class="pane-actions"><span class="count" id="runs-count"></span><button class="icon-btn" id="runs-refresh" title="Refresh" aria-label="Refresh runs"><svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 11-1.5-3.6M13 2.5v3h-3"/></svg></button></div>
+        </div>
+        <div class="filterbar" id="run-filter" role="tablist" aria-label="Show">
+          <button data-filter="all" class="active">All</button><button data-filter="starred" title="Starred runs and factors">★ Starred</button><button data-filter="factors" title="One row per alpha expression">Factors</button><button data-filter="trash" title="Deleted runs, restorable">Trash</button>
+        </div>
+        <div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input type="search" id="run-search" placeholder="Filter by alpha, label, universe…" aria-label="Filter runs"></div>
+        <div class="sortbar" id="run-sort">
+          <button data-sort="created" class="active">Newest</button><button data-sort="sharpe">Sharpe</button><button data-sort="cagr">CAGR</button><button data-sort="max_drawdown">Drawdown</button>
+        </div>
+        <div class="chipbar" id="run-chips" hidden></div>
+        <div class="list" id="runs-list" tabindex="0" aria-label="Saved runs"></div>
+        <div class="list-foot" id="runs-foot" hidden></div>
+      </div>
+      <div class="xview" data-view="data">
+        <div class="pane-head"><span>Datasets</span>
+          <div class="pane-actions"><span class="count" id="datasets-count"></span><button class="icon-btn" id="datasets-refresh" title="Refresh" aria-label="Refresh datasets"><svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 11-1.5-3.6M13 2.5v3h-3"/></svg></button></div>
+        </div>
+        <div class="list" id="datasets-list" aria-label="Prepared datasets"></div>
+      </div>
+      <div class="xview active" data-view="lab">
+        <div class="pane-head"><span>Alpha library</span>
+          <div class="pane-actions"><span class="count" id="lab-count"></span><button class="icon-btn" id="lab-refresh" title="Refresh" aria-label="Refresh the alpha library"><svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 11-1.5-3.6M13 2.5v3h-3"/></svg></button></div>
+        </div>
+        <div class="filterbar" id="lab-filter" role="tablist" aria-label="Show">
+          <button data-filter="all" class="active">All</button><button data-filter="starred">★ Starred</button><button data-filter="trash" title="Hidden alphas, restorable">Trash</button>
+        </div>
+        <div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input type="search" id="lab-search" placeholder="Filter alphas" aria-label="Filter alphas"></div>
+        <div class="sortbar" id="lab-sort">
+          <button data-sort="created_at" class="active">Newest</button><button data-sort="fitness">Fitness</button><button data-sort="sharpe">Sharpe</button><button data-sort="turnover">Turnover</button>
+        </div>
+        <div class="list" id="lab-list" tabindex="0" aria-label="Saved alphas"></div>
+      </div>
+    </aside>
+    <div class="resizer v" data-resize="explorer" aria-hidden="true"></div>
+
+    <!-- ========================================================== center -->
+    <main class="center" id="center">
+      <div class="console-notices" id="console-notices">
+        <div class="console-notice error" id="boot-error" role="alert" hidden></div>
+        <div class="console-notice" id="recovery-note" role="status" aria-live="polite" hidden></div>
+      </div>
+      <div class="cview" data-view="research">
+        <div class="console-notice compatibility-note" id="rh-compatibility" role="status" hidden></div>
+        <section class="editor">
+          <div class="pane-head">
+            <span class="file"><svg viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></svg>Qlib Validation<span class="file-hint">native Qlib expressions · next-open fills</span></span>
+            <div class="pane-actions">
+              <span class="syntax" id="alpha-status"></span>
+              <div class="menu-wrap"><button class="btn ghost small" id="examples-btn">Examples<svg class="chev" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3"/></svg></button><div class="menu" id="examples-menu" hidden></div></div>
+            </div>
+          </div>
+          <div class="code-editor" id="code-editor">
+            <div class="gutter" id="gutter" aria-hidden="true"></div>
+            <div class="code-area">
+              <pre class="highlight" id="highlight" aria-hidden="true"></pre>
+              <textarea id="alpha" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Native Qlib alpha expression"></textarea>
+            </div>
+          </div>
+        </section>
+        <section class="period" id="period" aria-label="Backtest window">
+          <div class="period-head">
+            <span class="period-title">Backtest window</span>
+            <span class="period-summary" id="period-summary"></span>
+            <div class="presets" id="period-presets">
+              <button data-range="all" title="Every session after the warm-up">All</button><button data-range="universe" title="From the first month with a full universe">Full universe</button><button data-range="10y">10Y</button><button data-range="5y">5Y</button><button data-range="3y">3Y</button><button data-range="1y">1Y</button><button data-range="ytd">YTD</button>
+            </div>
+          </div>
+          <div class="period-nav" id="period-nav"></div>
+        </section>
+        <div class="tabs" id="main-tabs" role="tablist">
+          <button class="tab active" data-tab="overview" role="tab">Overview</button>
+          <button class="tab" data-tab="returns" role="tab">Returns</button>
+          <button class="tab" data-tab="signal" role="tab" title="IC and quantile returns of the alpha">Signal</button>
+          <button class="tab" data-tab="details" role="tab">Details</button>
+          <button class="tab" data-tab="compare" role="tab" id="compare-tab" hidden>Compare<span class="badge" id="compare-count"></span></button>
+          <button class="tab" data-tab="report" role="tab" id="report-tab" hidden>Report<span class="tab-close" id="report-close" title="Close report">×</span></button>
+          <div class="tabs-spacer"></div>
+          <div class="tab-actions" id="result-actions" hidden>
+            <button class="icon-btn star-btn" id="star-run" title="Star this run (S)" aria-label="Star this run"></button>
+            <button class="btn small" id="use-settings" title="Copy this run's settings into the parameters">Use settings</button>
+            <div class="menu-wrap"><button class="btn small" id="report-btn">Report<svg class="chev" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3"/></svg></button><div class="menu right" id="report-menu" hidden></div></div>
+            <button class="icon-btn" id="run-more" title="More actions" aria-label="More actions"><svg viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.1"/><circle cx="8" cy="8" r="1.1"/><circle cx="12.5" cy="8" r="1.1"/></svg></button>
+          </div>
+        </div>
+        <section class="result tab-body active" data-tab="overview" id="result">
+          <div class="empty-state" id="result-empty">
+            <svg viewBox="0 0 48 48"><path d="M6 38l10-12 8 6 18-22"/><path d="M34 10h8v8"/></svg>
+            <div class="empty-title">No run selected</div>
+            <div class="empty-sub">Write an alpha, choose the window above and press <kbd>⌘R</kbd> — or pick a saved run on the left.</div>
+          </div>
+          <div class="result-body" id="result-body" hidden>
+            <div class="run-head">
+              <div class="run-title"><span class="status" id="rh-status"></span><span id="rh-title"></span></div>
+              <div class="run-meta" id="rh-meta"></div>
+              <div class="run-note selectable" id="rh-note" hidden></div>
+            </div>
+            <div class="window-bar" id="window-bar" hidden></div>
+            <div class="kpis" id="kpis"></div>
+            <div class="more" id="more-metrics"></div>
+            <div class="charts">
+              <div class="chart-card">
+                <div class="chart-head"><span class="chart-title">Net equity</span><span class="chart-note" id="equity-note"></span>
+                  <span class="chart-hint">drag to zoom · double-click to reset</span>
+                  <div class="seg small" id="scale"><button data-scale="linear" class="active">Linear</button><button data-scale="log">Log</button></div>
+                </div>
+                <div class="chart" id="equity-chart"></div>
+                <div class="chart short" id="dd-chart"></div>
+                <div class="navigator" id="analysis-nav" title="Drag the handles to analyse part of the run"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="result tab-body" data-tab="returns" id="returns-body"></section>
+        <section class="result tab-body" data-tab="signal" id="signal-body"></section>
+        <section class="result tab-body" data-tab="details" id="details-body"></section>
+        <section class="result tab-body" data-tab="compare" id="compare-body"></section>
+        <section class="report tab-body" data-tab="report"><iframe id="report-frame" title="Report"></iframe></section>
+      </div>
+
+      <div class="cview" data-view="data">
+        <section class="dataset-view" id="dataset-view">
+          <div class="empty-state"><div class="empty-title">No dataset selected</div><div class="empty-sub">Refresh market data or import a table with the panel on the right.</div></div>
+        </section>
+      </div>
+
+      <div class="cview active" data-view="lab">
+        <section class="editor">
+          <div class="pane-head">
+            <span class="file"><svg viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></svg>Alpha Lab · FASTEXPR · one per line</span>
+            <div class="pane-actions">
+              <span class="syntax" id="lab-status"></span>
+              <button class="btn ghost small" id="lab-examples" title="Load 25 price/volume alphas from 101 Formulaic Alphas">Alpha101 set</button>
+            </div>
+          </div>
+          <textarea id="lab-text" class="lab-text" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Alphas, one per line"></textarea>
+        </section>
+        <section class="period" id="lab-period" aria-label="Simulation window">
+          <div class="period-head">
+            <span class="period-title">Simulation window</span>
+            <span class="period-summary" id="lab-period-summary"></span>
+            <div class="presets" id="lab-period-presets">
+              <button data-range="universe" title="From the first month with a full universe (the default)">Full universe</button><button data-range="all" title="Every session after the warm-up">All</button><button data-range="5y">5Y</button><button data-range="3y">3Y</button><button data-range="1y">1Y</button>
+            </div>
+          </div>
+          <div class="period-nav" id="lab-period-nav"></div>
+        </section>
+        <section class="result lab-result" id="lab-result">
+          <div class="empty-state" id="lab-empty">
+            <svg viewBox="0 0 48 48"><path d="M18 6h12M20 6v12L9 36a3 3 0 002.6 4.5h24.8A3 3 0 0039 36L28 18V6"/><path d="M14 30h20"/></svg>
+            <div class="empty-title">Alpha Lab</div>
+            <div class="empty-sub">Choose Trading prices in the toolbar, write FASTEXPR alphas (one per line), and press <kbd>⌘R</kbd> to simulate and save to the library. Native Qlib expressions belong in Qlib Validation.</div>
+          </div>
+          <div class="result-body" id="lab-body" hidden></div>
+        </section>
+      </div>
+
+      <div class="resizer h" data-resize="bottom" aria-hidden="true"></div>
+      <section class="bottom" id="bottom">
+        <div class="tabs small" id="bottom-tabs" role="tablist">
+          <button class="tab active" data-ptab="console">Console<span class="badge" id="console-badge" hidden></span></button>
+          <button class="tab" data-ptab="holdings">Holdings</button>
+          <button class="tab" data-ptab="universe">Universe</button>
+          <div class="tabs-spacer"></div>
+          <button class="icon-btn" id="console-clear" title="Clear console" aria-label="Clear console"><svg viewBox="0 0 16 16"><path d="M3 4h10M6 4V2.8h4V4M4.5 4l.7 9h5.6l.7-9"/></svg></button>
+          <button class="icon-btn" id="bottom-hide" title="Hide panel (⌘J)" aria-label="Hide panel"><svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>
+        </div>
+        <div class="ptab active" data-ptab="console"><pre class="console" id="console"></pre></div>
+        <div class="ptab" data-ptab="holdings"><div class="holdings" id="holdings"><div class="muted pad">Select a completed run.</div></div></div>
+        <div class="ptab" data-ptab="universe"><div class="universe" id="universe-panel"><div class="muted pad">This dataset has no dated universe.</div></div></div>
+      </section>
+    </main>
+    <div class="resizer v" data-resize="inspector" aria-hidden="true"></div>
+
+    <!-- ========================================================== inspector -->
+    <aside class="inspector" id="inspector">
+      <div class="iview" data-view="research">
+        <div class="pane-head"><span>Parameters</span><div class="pane-actions"><button class="btn ghost small" id="reset-params" title="Restore defaults">Reset</button></div></div>
+        <div class="props">
+          <div class="group-title">Strategy</div>
+          <div class="prop" data-for="signed"><label>Weighting</label><div class="seg small" id="transform" role="radiogroup" aria-label="Weighting"><button type="button" data-transform="raw" role="radio" title="Weights proportional to the raw alpha">Raw</button><button type="button" data-transform="rank" role="radio" title="Centered cross-sectional ranks: robust to outliers, dollar-neutral">Rank</button><button type="button" data-transform="zscore" role="radio" title="Cross-sectional z-scores: the demeaned alpha, dollar-neutral">Z-score</button></div></div>
+          <div class="prop" data-for="signed"><label for="gross">Gross exposure</label><div class="slider"><input type="range" id="gross-range" min="0" max="1" step="0.05" value="1" aria-label="Gross exposure slider"><input type="number" id="gross" min="0" max="1" step="0.05" value="1"></div></div>
+          <div class="prop" data-for="signed"><label for="borrow">Borrow rate</label><div class="unit"><input type="number" id="borrow" min="0" max="100" step="0.1" value="0.4"><span>% / yr</span></div></div>
+          <div class="prop" data-for="long-only"><label for="topk">Top-k</label><div class="unit"><input type="number" id="topk" min="1" step="1" value="50"><span>names</span></div></div>
+          <div class="prop" data-for="long-only"><label for="ndrop">Replace / day</label><div class="unit"><input type="number" id="ndrop" min="0" step="1" value="5"><span>names</span></div></div>
+          <p class="prop-note" id="assumptions"></p>
+
+          <div class="group-title">Window</div>
+          <div class="prop"><label for="start">Start</label><input type="date" id="start"></div>
+          <div class="prop"><label for="end">End</label><input type="date" id="end"></div>
+          <div class="prop"><label for="warmup">Warm-up</label><div class="unit"><input type="number" id="warmup" min="1" value="252"><span>sessions</span></div></div>
+          <p class="prop-note">Drag the window bar above the results, or type dates. Blank uses the whole dataset after the warm-up; dates snap to trading sessions.</p>
+
+          <div class="group-title">Costs &amp; cash</div>
+          <div class="prop"><label for="cost">Cost / side</label><div class="unit"><input type="number" id="cost" min="0" step="0.5" value="5"><span>bps</span></div></div>
+          <div class="prop"><label for="cash">Cash rate</label><div class="unit"><input type="number" id="cash" step="0.1" value="0"><span>% / yr</span></div></div>
+          <div class="prop"><label>Capital</label><div class="static mono">$100,000</div></div>
+          <p class="prop-note">Signals use the prior close; fills at the next open.</p>
+        </div>
+        <div class="inspector-foot"><button class="btn primary block" id="run-2">Run validation<kbd>⌘R</kbd></button></div>
+      </div>
+
+      <div class="iview" data-view="data">
+        <div class="pane-head"><span>Market data</span></div>
+        <div class="props">
+          <div class="group-title">Refresh from Yahoo</div>
+          <p class="prop-note">Fetches every US stock's daily history with split and dividend events, builds the table and a new TOP3000 snapshot, then checks its quality. About an hour; an interrupted fetch resumes. Nothing earlier is overwritten.</p>
+          <div class="prop"><label for="refresh-minprice">Min price</label><div class="unit"><input type="number" id="refresh-minprice" min="0" step="0.5" value="1"><span>$ traded</span></div></div>
+          <button class="btn block" id="refresh-data">Refresh market data</button>
+          <p class="prop-note" id="sources-note"></p>
+          <details class="adv">
+            <summary>Import a table</summary>
+            <div class="file-pick"><input type="text" id="table" placeholder="table.parquet, .csv or d_us_txt.zip" aria-label="Table path"><button class="btn small" id="choose-table">Choose…</button></div>
+            <div class="prop"><label for="imp-start">Start</label><input type="date" id="imp-start" value="2010-01-01"></div>
+            <div class="prop"><label for="imp-end">End</label><input type="date" id="imp-end"></div>
+            <div class="prop"><label for="imp-size">Universe size</label><div class="unit"><input type="number" id="imp-size" min="1" value="3000"><span>names</span></div></div>
+            <div class="prop"><label for="imp-adv">ADV window</label><div class="unit"><input type="number" id="imp-adv" min="1" value="20"><span>sessions</span></div></div>
+            <div class="prop"><label for="imp-history">Min history</label><div class="unit"><input type="number" id="imp-history" min="1" value="252"><span>sessions</span></div></div>
+            <div class="prop"><label for="imp-minprice">Min price</label><div class="unit"><input type="number" id="imp-minprice" min="0" step="0.5" value="1"><span>$ traded</span></div></div>
+            <div class="prop"><label for="imp-groups">Groups</label><input type="text" id="imp-groups" placeholder="screener folder (optional)" aria-label="Sector groups folder"></div>
+            <div class="prop"><label for="imp-workers">Workers</label><input type="number" id="imp-workers" min="1" max="64" value="8"></div>
+            <div class="prop"><label for="imp-default">Make default</label><label class="switch"><input type="checkbox" id="imp-default" checked><span></span></label></div>
+            <p class="prop-note">Common stocks are ranked monthly by trailing dollar volume; membership takes effect the next session. Every exclusion is recorded.</p>
+            <button class="btn primary block" id="import">Import &amp; build universe</button>
+          </details>
+        </div>
+      </div>
+
+      <div class="iview active" data-view="lab">
+        <div class="pane-head"><span>Simulation settings</span><div class="pane-actions"><button class="btn ghost small" id="lab-reset" title="BRAIN defaults">Reset</button></div></div>
+        <div class="props" id="lab-props">
+          <div class="group-title">Universe</div>
+          <div class="prop"><label for="lab-universe">Universe</label><select id="lab-universe"><option>TOP3000</option><option>TOP2000</option><option>TOP1000</option><option>TOP500</option><option>TOP200</option></select></div>
+          <div class="prop"><label>Delay</label><div class="seg small" id="lab-delay"><button type="button" data-delay="1" class="active">1</button><button type="button" data-delay="0">0</button></div></div>
+          <div class="group-title">Portfolio</div>
+          <div class="prop"><label for="lab-group-source">Classification source</label><select id="lab-group-source"><option value="">Embedded groups / no overlay</option></select></div>
+          <div class="lab-group-controls"><input id="lab-group-path" type="text" placeholder="Classification folder (optional)" aria-label="Classification folder"><button class="btn small" id="lab-group-choose" title="Choose a folder or its manifest.json">Choose…</button><button class="btn small" id="lab-group-refresh">Refresh</button></div>
+          <div class="lab-group-note" id="lab-group-caption" aria-live="polite"></div>
+          <details class="lab-group-details" id="lab-group-details" hidden><summary>Source limitations and diagnostics</summary><div class="lab-group-note" id="lab-group-detail-text"></div></details>
+          <div class="prop"><label for="lab-neutralization">Neutralization</label><select id="lab-neutralization"><option value="MARKET">MARKET</option><option value="SECTOR">SECTOR</option><option value="INDUSTRY">INDUSTRY</option><option value="COUNTRY">COUNTRY</option><option value="NONE">NONE</option></select></div>
+          <div class="lab-group-note bad" id="lab-neutralization-note" aria-live="polite"></div>
+          <div class="prop"><label for="lab-decay">Decay</label><div class="unit"><input type="number" id="lab-decay" min="0" max="512" step="1" value="0"><span>days</span></div></div>
+          <div class="prop"><label for="lab-truncation">Truncation</label><div class="unit"><input type="number" id="lab-truncation" min="0" max="1" step="0.01" value="0.08"><span>max weight</span></div></div>
+          <div class="prop"><label for="lab-pasteurize">Pasteurize</label><label class="switch"><input type="checkbox" id="lab-pasteurize" checked><span></span></label></div>
+          <div class="prop"><label for="lab-cost">Cost</label><div class="unit"><input type="number" id="lab-cost" min="0" step="0.5" value="0"><span>bps traded</span></div></div>
+          <div class="group-title">Window</div>
+          <div class="prop"><label for="lab-start">Start</label><input type="date" id="lab-start"></div>
+          <div class="prop"><label for="lab-end">End</label><input type="date" id="lab-end"></div>
+          <div class="prop"><label for="lab-oos">Out-of-sample</label><input type="date" id="lab-oos" title="Also report metrics before and after this date"></div>
+          <details class="adv">
+            <summary>Execution</summary>
+            <div class="prop"><label for="lab-workers">Workers</label><input type="number" id="lab-workers" min="1" max="64" value="4"></div>
+            <div class="prop"><label for="lab-force">Re-run saved</label><label class="switch"><input type="checkbox" id="lab-force"><span></span></label></div>
+          </details>
+          <p class="prop-note">BRAIN-style: weights from the alpha each day (delay, decay, neutralization, gross 1, truncation), PnL from next-day returns on a $20M book. Checks are local approximations; see docs/ALPHA_LAB.md.</p>
+        </div>
+        <div class="inspector-foot"><button class="btn primary block" id="lab-run">Simulate alphas<kbd>⌘R</kbd></button></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ============================================================ status bar -->
+  <footer class="statusbar">
+    <div class="sb-left">
+      <span class="sb-item" id="sb-state"><span class="sb-dot"></span><span id="sb-text">Ready</span></span>
+      <span class="sb-progress" id="sb-progress" hidden><span class="sb-bar"><span id="sb-bar"></span></span><span class="mono" id="sb-time"></span></span>
+      <button class="sb-link" id="sb-cancel" hidden>Cancel</button>
+    </div>
+    <div class="sb-right">
+      <span class="sb-item mono" id="sb-dataset"></span>
+      <button class="sb-item sb-link" id="sb-root" title="Show the data folder"></button>
+      <span class="sb-item" id="sb-engine"><span class="sb-dot"></span><span>Signed engine</span></span>
+      <span class="sb-item mono" id="sb-version">UI workbench-cleanup-2026-10-14</span>
+    </div>
+  </footer>
+</div>
+
+<!-- ============================================================ overlays -->
+<dialog id="sec-dialog" class="sec-dialog" aria-labelledby="sec-title">
+  <div class="sec-head"><h2 id="sec-title">SEC fields</h2><button class="btn" id="sec-close">Close</button></div>
+  <p>Choose a catalog once, then write formulas such as rank(sec_inventory / sec_assets). Inputs resolve automatically. Trading prices are selected separately.</p>
+  <div class="sec-controls"><label>Source catalog <select id="sec-catalog" aria-label="SEC source catalog"></select><span id="sec-catalog-fixed" hidden></span></label><button class="btn small" id="sec-reload">Refresh catalogs</button></div>
+  <div id="sec-message" role="status" aria-live="polite"></div>
+  <div id="sec-legacy" class="warn" hidden>Earlier saved inputs (read only). Exact definitions remain usable; switch to the shared dictionary for new fields.
+    <button id="sec-switch-dictionary" class="btn small" aria-controls="sec-switch-confirmation" aria-expanded="false">Switch to dictionary</button>
+    <div id="sec-switch-confirmation" role="group" aria-labelledby="sec-switch-title" aria-describedby="sec-switch-warning" tabindex="-1" hidden>
+      <p id="sec-switch-title">Switch to the shared dictionary?</p>
+      <p id="sec-switch-warning">This clears the current editors' saved aliases, definitions and registry pins. Formula names may need updating. Historical runs and their original definitions remain unchanged.</p>
+      <div class="sec-controls"><button id="sec-switch-confirm" class="btn">Confirm switch</button><button id="sec-switch-cancel" class="btn">Cancel</button></div>
+    </div>
+  </div>
+  <section aria-label="Shared SEC dictionary"><h3>Shared dictionary</h3>
+    <div class="sec-controls"><label for="sec-dictionary-view">View</label><select id="sec-dictionary-view"><option value="company" selected>Company fields</option><option value="recipes">Advanced definitions</option></select></div>
+    <div class="sec-controls sec-search-controls"><label for="sec-dictionary-query">Accounting words, SEC tag or formula name</label><input id="sec-dictionary-query" type="search" placeholder="inventory, InventoryNet or sec_inventory"><button id="sec-dictionary-search" class="btn">Search</button></div>
+    <label id="sec-dictionary-custom-control" class="sec-toggle" hidden><input id="sec-dictionary-custom" type="checkbox">Include company-defined or unconfirmed fields</label>
+    <p id="sec-dictionary-view-help" class="sec-hint">Company fields group standard taxonomy families with blank segment and co-registrant context. Choose an observed unit and period before inserting.</p>
+    <details><summary>Naming and search help</summary><p class="sec-hint">Company fields use a standard taxonomy family with blank segment/coreg context; this is not a promise of company coverage or data quality. Special dimensions, entities, custom tags and exact editions belong in Advanced definitions. Choices are exact observed unit/period recipes: currencies remain distinct, with no automatic FX conversion or computed TTM. Empty search shows starter concepts, not an exhaustive universe. Broad searches may return partial results within the search budget; concept groups and variant lists are not global counts. The large dictionary count measures stored definitions, not accounting concepts. Formula names use lowercase snake_case, such as sec_earnings_per_share_basic; some have shorter reviewed aliases. Original SEC tags retain their capitalization. Earlier canonical names remain usable, including special saved inputs. Advanced recipes retain raw definitions under Recipe details. Search runs on Search or Enter. Narrow the query or use an exact formula name. Preparation runs only when requested.</p></details>
+    <p id="sec-dictionary-status" role="status" aria-live="polite"></p>
+    <button id="sec-dictionary-build" class="btn" hidden>Prepare shared dictionary</button>
+    <div id="sec-dictionary-items" class="sec-tags"></div>
+    <div class="sec-controls sec-pagination"><button id="sec-dictionary-prev" class="btn small" disabled>Previous names</button><span id="sec-dictionary-page"></span><button id="sec-dictionary-next" class="btn small" disabled>Next names</button></div>
+  </section>
+  <section><h3>Formula inputs</h3><div id="sec-bindings"></div><button class="btn small" id="sec-clear" hidden>Clear saved input pins</button><p class="sec-hint">Definitions are read only. Clearing pins affects only the current editors, not historical results.</p></section>
+  <details><summary>Advanced: inspect raw source tables and notes</summary>
+    <p>Every imported field and column remains accessible here, including text, custom definitions and unavailable numeric metadata. Numeric inputs require a valid dictionary recipe. Text and notes catalogs support raw inspection only. Filters are exact column/value pairs, for example {"tag":"InventoryNet"}.</p>
+    <div class="sec-controls"><label>Table <select id="sec-table"><option>SUB</option><option>TAG</option><option>NUM</option><option>PRE</option></select></label><label>Filters (JSON) <input id="sec-filters" value="{}" aria-label="SEC table filters JSON"></label><button class="btn" id="sec-inspect">Read rows</button></div>
+    <pre id="sec-rows" tabindex="0" aria-label="Raw SEC source rows">Choose a table and press Read rows.</pre>
+    <div class="sec-controls"><button class="btn small" id="sec-rows-prev" disabled>Previous rows</button><span id="sec-rows-page"></span><button class="btn small" id="sec-rows-next" disabled>Next rows</button></div>
+  </details>
+</dialog>
+<div class="overlay" id="palette" hidden>
+  <div class="palette" role="dialog" aria-label="Command palette">
+    <div class="palette-input"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input id="palette-input" placeholder="Type a command, run, dataset or example…" aria-label="Command"></div>
+    <div class="palette-list" id="palette-list" role="listbox"></div>
+    <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> run</span><span><kbd>esc</kbd> close</span></div>
+  </div>
+</div>
+<div class="popover" id="dataset-popover" hidden></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script src="/static/core.js"></script>
+<script src="/static/charts.js"></script>
+<script src="/static/analytics.js"></script>
+<script src="/static/research.js?v=research-2026-10-10.1"></script>
+<script src="/static/app.js?v=workbench-cleanup-2026-10-14"></script>
+</body>
+</html>

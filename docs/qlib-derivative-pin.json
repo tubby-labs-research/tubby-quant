@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/tubby-labs-research/qlib",
+  "upstream_commit": "da920b7f954f48ab1bb64117c976710de198373e",
+  "commit": "8ab6249aa6143cb0675259d5ff986d294e918ef4",
+  "version": "0.9.7+tubby.4",
+  "branch": "codex/ordered-session-hook",
+  "build_method": "verified-upstream-native-wheel-plus-tracked-python-patches",
+  "platform_tag": "cp312-cp312-win_amd64",
+  "base_wheel_sha256": "dfbee9f0f3005fe805798e2a21c73b198272f1341d5f0d7771e127166faac08e",
+  "wheel_sha256": "9157e9554a46b30e7ec4e83f7d9f03022c6b8781816da5170587d3fe6ec4e1af",
+  "local_wheel": "env/qlib-signed-wheels/tubby4-prototype-01/pyqlib-0.9.7+tubby.4-cp312-cp312-win_amd64.whl",
+  "local_runtime": "env/qlib-signed-runtime-8ab6249",
+  "validated_date": "2026-10-04",
+  "console_integration": true,
+  "platforms": {
+    "darwin-universal2": {
+      "commit": "d10a5a8ca397ea088da8f5c996e8bd042eea27e0",
+      "version": "0.9.7+tubby.3",
+      "branch": "codex/executor-day-cache",
+      "platform_tag": "cp312-cp312-macosx_10_13_universal2",
+      "base_wheel_sha256": "9adffd819e0414cf288c84f6136fb397c63eb3d4bcadf063fd1ec8f4100857fc",
+      "wheel_sha256": "a8387ccca0d9908d3f3df77f7247efc4d12c209cd2952bd104b6335f14d7fbd1",
+      "local_wheel": "env/qlib-signed-wheels/d10a5a8/pyqlib-0.9.7+tubby.3-cp312-cp312-macosx_10_13_universal2.whl",
+      "local_runtime": "env/qlib-signed-runtime-d10a5a8-macos",
+      "validated_date": "2026-10-03",
+      "build_environment": "Hash-pinned Python-only overlay of the official macOS universal2 native wheel. Native bytes unchanged; see platform validation limitations."
+    }
+  },
+  "build_reproducibility": "Hash-pinned Python-only overlays of official Qlib native wheels. Windows uses tubby.4; macOS intentionally retains tubby.3. Separate platform pins are not interchangeable."
+}

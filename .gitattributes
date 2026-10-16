@@ -1,0 +1,22 @@
+# Keep source and documentation text consistent across collaborators.
+* text=auto eol=lf
+
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.csv text eol=lf
+
+# Windows scripts: cmd.exe needs CRLF for labels and goto; PowerShell prefers it.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Common binary formats must not be line-ending normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.zip binary

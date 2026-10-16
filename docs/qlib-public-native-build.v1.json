@@ -1,0 +1,89 @@
+{
+  "allow_incomplete_toolchain": true,
+  "artifact": {
+    "name": "session_loops.cp312-win_amd64.pyd",
+    "sha256": "20ef8147b397d47686146c22bd40bdacc5e1a152b3da2915ced4ab97684b3bd6"
+  },
+  "build_dependency_versions": {
+    "numpy": "1.26.4",
+    "pandas": "2.2.3",
+    "setuptools": "80.10.2",
+    "wheel": "0.46.3"
+  },
+  "build_program_sha256": "dc2b648681b56cef65d2b2b9d97892b1874aa389094e35be9ca7c6ee123357df",
+  "compiler_banner": "\u7528\u6cd5: cl [ \u9009\u9879... ] \u6587\u4ef6\u540d... [ /link \u94fe\u63a5\u9009\u9879... ]\r\nMicrosoft (R) C/C++ Optimizing Compiler Version 19.51.36244 for x64\r\n\u7248\u6743\u6240\u6709(C) Microsoft Corporation\u3002\u4fdd\u7559\u6240\u6709\u6743\u5229\u3002\r\n\r\n",
+  "compiler_flags": [
+    "/MD",
+    "/fp:strict",
+    "/Brepro",
+    "/experimental:deterministic",
+    "/pathmap:<build-root>=/framework"
+  ],
+  "compiler_flags_representation": "pathmap build-root is the actual absolute workspace; all other flags are literal",
+  "cython_version": "3.1.8",
+  "cython_wheel_sha256": "cae61e8e730bfc7de917204c8b7c1ca8e3e0d134dcaa55a2e2ef98de741590fb",
+  "directives": {
+    "annotation_typing": false,
+    "binding": true,
+    "boundscheck": true,
+    "cdivision": false,
+    "infer_types": false,
+    "language_level": 3,
+    "wraparound": true
+  },
+  "extension_suffix": ".cp312-win_amd64.pyd",
+  "generated_c_identity_location": "local-generated-c.json (workspace-dependent Cython metadata; local evidence only)",
+  "gil_held": true,
+  "installation_healthy": false,
+  "kind": "public_date_range_cython_build",
+  "linker_flags": [
+    "/Brepro"
+  ],
+  "macros": [
+    [
+      "CYTHON_USE_DICT_VERSIONS",
+      "0"
+    ]
+  ],
+  "msvc_tools_version": "14.51.36231",
+  "numpy_c_api_used": false,
+  "path_privacy_counts": {
+    "absolute_windows_paths": 0,
+    "checkout_name": 0,
+    "personal_roots": 0
+  },
+  "platform": "win-amd64",
+  "private_import_tokens": [
+    "_PyDict_GetItem_KnownHash",
+    "_PyObject_GC_New",
+    "_PyObject_GenericGetAttrWithDict",
+    "_PyThreadState_UncheckedGet",
+    "_Py_Dealloc",
+    "_Py_FalseStruct",
+    "_Py_NoneStruct",
+    "_Py_TrueStruct"
+  ],
+  "public_api_only_certified": false,
+  "public_builder_sha256": "b366c8bb993cf02ee3ba24430ea05c6c4b2b881ecc4041146394b1938dcd254a",
+  "python_header_sha256": "729ef157f6026e6e1b3104593f87dddc597c3b83b60c7c2965878c62a56c6f7d",
+  "python_import_library_sha256": "e4138278cf48d2723946e4163198d2e5281d0ca15ff5d05b9bee73ada6394e29",
+  "python_version": [
+    3,
+    12,
+    14
+  ],
+  "schema_version": 1,
+  "source_sha256": {
+    "qlib_yahoo/fast_signed.py": "5abd4863c48ea38b970790f8d48f6fd59e5c6eb451389baf721eab0cef724c42",
+    "qlib_yahoo/session_range_buffer.pyx": "48c641d31e55280f6a1087fbb0eba2ae6eae0abcd58b3fb798f72447690e55bd",
+    "scripts/build_qlib_session_loops.py": "bc92de10aa0ffd1a73e4796ac0a3ee0c600877599d8c0cc5003f050db3c6b07a"
+  },
+  "stage": "completed",
+  "status": "completed",
+  "tool_sha256": {
+    "cl.exe": "9cf613fcbebece019712511eec4b1a32d0a9c94e65249a1aeb326305c2388d6b",
+    "dumpbin.exe": "fa56feba5e8c4f81b4be7abf65aa4ff118e0a644169a239a54f59355c701e839",
+    "link.exe": "101461b51a18daaf033cb743690e20b449e9ac8783638e961bb65c5fd36e9cb5"
+  },
+  "windows_sdk_version": "10.0.26100.0"
+}

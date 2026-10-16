@@ -1,0 +1,46 @@
+# Local Python environments and caches
+env/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Machine configuration and secrets
+.env
+.env.*
+!.env.example
+*.local.json
+*.pem
+*.key
+
+# User data, campaigns and generated outputs
+datasets/
+sources/
+cache/
+runs/
+results/
+alphalab/
+sec/
+classifications/
+autoresearch-demo/
+research/
+release-candidates/
+*.log
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+
+# Editor / operating-system state
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

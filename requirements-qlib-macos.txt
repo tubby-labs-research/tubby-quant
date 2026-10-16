@@ -1,0 +1,4 @@
+# macOS desktop workbench (native WebKit window). Install into the isolated Qlib env on macOS only.
+-r requirements-qlib-yahoo.txt
+-r requirements-qlib-table.txt
+pywebview==6.2.1

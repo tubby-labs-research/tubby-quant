@@ -1,0 +1,64 @@
+/* Research extends the shared workbench tokens, including automatic light/dark appearance. */
+body[data-view="auto"] .center { grid-template-rows: minmax(0, 1fr) 0 0; }
+body[data-view="auto"] .center > .bottom, body[data-view="auto"] .center > .resizer.h,
+body[data-view="auto"] .research-only, body[data-view="auto"] #tb-dataset { display: none; }
+body[data-view="auto"] #sb-dataset { display: none; }
+.ar-workspace { overflow: hidden; }
+.ar-header { padding: 20px 20px 16px; display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--border); }
+.ar-heading { flex: 1; min-width: 160px; }
+.ar-eyebrow { color: var(--accent); text-transform: uppercase; font-size: 10px; font-weight: 650; letter-spacing: .11em; }
+.ar-heading h1 { margin: 6px 0; font-size: 21px; font-weight: 600; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.ar-heading p { margin: 0; color: var(--t3); font-size: 12px; }
+.ar-head-actions { display: flex; gap: 8px; align-items: center; }
+.ar-composer { flex: 0 0 100%; border: 1px solid var(--border-strong); background: var(--panel); border-radius: 9px; padding: 10px 12px; }
+.ar-composer label { display: block; color: var(--t2); font-size: 11px; margin-bottom: 5px; }
+.ar-composer textarea { width: 100%; border: 0; outline: none; background: transparent; resize: vertical; min-height: 46px; max-height: 140px; line-height: 1.6; user-select: text; }
+.ar-composer textarea:focus { box-shadow: none; }
+.ar-composer .ar-note { padding: 2px 0 0; font-size: 10.5px; }
+.ar-workflow { display: flex; padding: 12px 20px; gap: 8px; background: var(--panel); flex: none; border-bottom: 1px solid var(--border); }
+.ar-stage { flex: 1; color: var(--t3); display: flex; align-items: center; gap: 6px; font-size: 11px; white-space: nowrap; }
+.ar-stage-number { width: 20px; height: 20px; border: 1px solid var(--border-strong); border-radius: 50%; display: grid; place-items: center; font: 10px var(--mono); flex: none; }
+.ar-stage.current { color: var(--accent); }.ar-stage.current .ar-stage-number { border-color: var(--accent); background: var(--accent-soft); }
+.ar-budget { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); flex: none; padding: 12px 20px; gap: 12px; border-bottom: 1px solid var(--border); }
+.ar-stat span { display: block; color: var(--t3); font-size: 11px; }.ar-stat strong { display: block; margin-top: 4px; font: 19px var(--mono); font-weight: 500; }
+.ar-content { overflow: auto; padding: 16px 20px 24px; flex: 1; min-height: 0; user-select: text; }
+.ar-empty { padding: 38px 18px; margin-top: 15px; text-align: center; max-width: 490px; margin-left: auto; margin-right: auto; }
+.ar-empty > svg { width: 32px; height: 32px; color: var(--accent); }.ar-empty h2 { font-size: 18px; font-weight: 600; margin: 16px 0 8px; }
+.ar-empty p { color: var(--t2); line-height: 1.8; }.ar-empty-actions { margin: 18px 0; display: flex; justify-content: center; gap: 8px; }
+.ar-explorer-actions { display: flex; gap: 6px; padding: 10px 12px; }.ar-explorer-actions .btn { flex: 1; justify-content: center; font-size: 11px; padding: 0 6px; }
+.ar-campaign { width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--border); padding: 11px 14px; background: transparent; position: relative; }
+.ar-campaign:hover { background: var(--hover); }.ar-campaign.selected { background: var(--accent-soft); }.ar-campaign.selected::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); }
+.ar-campaign-name { display: block; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }.ar-campaign-meta, .ar-campaign-date { display: block; color: var(--t3); font-size: 10.5px; margin-top: 4px; }.ar-campaign-date { font: 10px var(--mono); color: var(--t4); }
+.ar-form { padding: 14px; overflow: auto; flex: 1; min-height: 0; }
+.ar-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; min-width: 0; }.ar-field > span { color: var(--t2); font-size: 11px; }
+.ar-field input, .ar-field select, .ar-field textarea { width: 100%; min-width: 0; border: 1px solid var(--border-strong); background: var(--raised); border-radius: 5px; padding: 6px 7px; outline: none; user-select: text; }
+.ar-field textarea { resize: vertical; font: 11px/1.5 var(--mono); }.ar-field input:focus, .ar-field select:focus, .ar-field textarea:focus { border-color: var(--accent); }
+.ar-field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ar-section-title { margin: 16px 0 8px; color: var(--t2); font-size: 10px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.ar-note { padding: 7px 0; color: var(--t3); font-size: 11px; line-height: 1.6; }.ar-checkbox { display: flex; align-items: flex-start; gap: 7px; margin: 12px 0 2px; color: var(--t2); font-size: 11px; }.ar-checkbox input { accent-color: var(--accent); }
+.ar-advanced { margin: 16px 0; padding-top: 8px; border-top: 1px solid var(--border); }.ar-advanced summary { color: var(--t2); font-size: 11px; cursor: pointer; margin-bottom: 12px; }
+.ar-form-actions { display: flex; gap: 8px; padding-top: 10px; }.ar-form-actions .btn { flex: 1; justify-content: center; }.ar-form-error { color: var(--neg); font-size: 11px; overflow-wrap: anywhere; }
+.ar-connection { border: 1px solid var(--border); border-radius: 7px; background: var(--panel); padding: 9px 10px; margin-bottom: 12px; }
+.ar-agent-identity { color: var(--t2); font-size: 11px; font-weight: 550; overflow-wrap: anywhere; }
+.ar-connection [data-state="connected"] { color: var(--pos); }.ar-connection [data-state="unavailable"], .ar-connection [data-state="missing_credential"] { color: var(--warn); }
+.ar-advanced a { color: var(--accent); font-size: 11px; }
+.ar-test-picker { margin-top: 16px; }.ar-pnl { margin: 14px 0 20px; }.ar-period { margin-top: 12px; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.ar-stop-note { flex: 0 0 100%; }
+.ar-pnl-chart { height: 200px; }.ar-dd-chart { height: 80px; }
+.ar-card { background: var(--panel); border: 1px solid var(--border); border-radius: 9px; padding: 14px; margin-bottom: 14px; overflow: hidden; }.ar-card h3 { font-size: 13px; font-weight: 600; margin: 0 0 9px; }.ar-card p { margin: 10px 0; color: var(--t2); line-height: 1.65; }.ar-card a { color: var(--accent); font-size: 11px; overflow-wrap: anywhere; }.ar-card small { color: var(--t3); font-size: 10px; }
+.ar-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }.ar-card-head h3 { overflow-wrap: anywhere; }
+.ar-decision { white-space: nowrap; }.ar-promote { color: var(--pos); background: var(--pos-soft); }.ar-refine, .ar-repair { color: var(--accent); background: var(--accent-soft); }.ar-reject { color: var(--neg); background: var(--neg-soft); }.ar-park { color: var(--warn); background: var(--warn-soft); }
+.ar-review { padding: 9px 11px; border-radius: 6px; margin-top: 12px; }.ar-error { color: var(--neg); }
+.ar-table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; }.ar-table-toolbar b { font-weight: 550; font-size: 12px; }.ar-table-toolbar select { background: var(--raised); border: 1px solid var(--border-strong); border-radius: 5px; padding: 4px 7px; font-size: 11px; }
+.ar-table-wrap { overflow-x: auto; margin-bottom: 16px; border: 1px solid var(--border); border-radius: 8px; }.ar-table { border-collapse: collapse; width: 100%; font-size: 11px; }.ar-table th { background: var(--panel); color: var(--t3); font-size: 10px; font-weight: 500; white-space: nowrap; text-align: left; padding: 9px; border-bottom: 1px solid var(--border); }.ar-table td { padding: 9px; border-bottom: 1px solid var(--border); vertical-align: top; }.ar-table tr:last-child td { border-bottom: 0; }.ar-table tr.selected { background: var(--accent-soft); }.ar-table tr:hover { background: var(--hover); }
+.ar-idea-link { border: 0; background: transparent; padding: 0; text-align: left; min-width: 150px; max-width: 340px; }.ar-idea-link b { font-size: 11.5px; font-weight: 550; }.ar-idea-link code { display: block; color: var(--t3); font-size: 10.5px; margin-top: 4px; overflow-wrap: anywhere; }.ar-expression { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--raised); padding: 12px; border-radius: 6px; font: 12px/1.7 var(--mono); color: var(--tok-feature); user-select: text; }
+.ar-inline-actions { display: flex; gap: 6px; }.ar-detail-meta { color: var(--t3); font-size: 10.5px; margin-top: 9px; }.ar-lineage { display: flex; flex-direction: column; gap: 7px; margin: 12px 0; color: var(--t3); font-size: 11px; }.ar-metrics { margin: 14px 0; }.ar-metrics td { text-transform: capitalize; }
+.ar-card blockquote { border-left: 2px solid var(--accent); margin: 10px 0; padding: 0 0 0 12px; }.ar-card blockquote p { font-size: 12px; }.ar-card cite { color: var(--t3); font-size: 10.5px; }
+.ar-activity { display: flex; gap: 12px; margin-top: 16px; }.ar-activity-dot { margin-top: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }.ar-activity b { font-size: 11.5px; }.ar-activity p { margin: 4px 0; font-size: 11px; }.ar-log { font: 10px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--t3); }
+@media (max-width: 1200px) { .ar-workflow { padding: 10px 12px; gap: 5px; }.ar-stage { font-size: 9.5px; gap: 4px; }.ar-stage-number { width: 17px; height: 17px; }.ar-header { padding: 16px 12px 12px; }.ar-content { padding: 12px; }.ar-budget { padding: 12px; }.ar-stat strong { font-size: 16px; } }
+@media (max-width: 1000px) {
+  body[data-view="auto"] .body { grid-template-columns: 48px 160px 1px minmax(0, 1fr) 1px 240px; }
+  body.no-inspector[data-view="auto"] .body { grid-template-columns: 48px 160px 1px minmax(0, 1fr) 0 0; }
+  .ar-workflow { flex-wrap: wrap; }.ar-stage { flex: 0 0 45%; }.ar-budget { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ar-explorer-actions { flex-wrap: wrap; }.ar-explorer-actions .btn { flex: 0 0 100%; }.ar-header { gap: 10px; }.ar-heading h1 { font-size: 18px; }
+}

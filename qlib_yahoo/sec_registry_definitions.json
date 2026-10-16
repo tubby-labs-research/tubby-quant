@@ -1,0 +1,7 @@
+{
+  "sec_assets": {"tag": "Assets", "taxonomy": "us-gaap/", "unit": "USD", "qtrs": 0, "segments": "", "coreg": ""},
+  "sec_inventory": {"tag": "InventoryNet", "taxonomy": "us-gaap/", "unit": "USD", "qtrs": 0, "segments": "", "coreg": ""},
+  "sec_liabilities": {"tag": "Liabilities", "taxonomy": "us-gaap/", "unit": "USD", "qtrs": 0, "segments": "", "coreg": ""},
+  "sec_net_income_q": {"tag": "NetIncomeLoss", "taxonomy": "us-gaap/", "unit": "USD", "qtrs": 1, "segments": "", "coreg": ""},
+  "sec_net_income_4q": {"tag": "NetIncomeLoss", "taxonomy": "us-gaap/", "unit": "USD", "qtrs": 4, "segments": "", "coreg": ""}
+}

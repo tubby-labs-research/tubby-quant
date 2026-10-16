@@ -1,0 +1,16 @@
+# Teaching examples for Alpha Lab's FASTEXPR syntax.
+# Each non-comment line is a separate expression. These are syntax examples,
+# not evaluated strategies or trading recommendations.
+
+# Cross-sectional price and volume ranks.
+rank(close)
+rank(volume)
+
+# A price change over five observed sessions.
+close / ts_delay(close, 5) - 1
+
+# Compare today's volume with its recent average.
+volume / ts_mean(volume, 10)
+
+# Assign a reusable intermediate within one expression.
+daily_return = close / ts_delay(close, 1) - 1; rank(daily_return)

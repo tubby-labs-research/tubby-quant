@@ -1,0 +1,10 @@
+Tubby Labs framework
+Copyright 2026 the Tubby Labs contributors
+
+Project-owned code is licensed under the Apache License, Version 2.0.
+Retained third-party code and dependencies remain under their own licenses.
+
+This distribution includes code derived from Microsoft Qlib.
+Copyright (c) Microsoft Corporation.
+Qlib-derived components retain their MIT license and applicable source notices.
+See THIRD_PARTY_NOTICES.md for the retained license text and source references.

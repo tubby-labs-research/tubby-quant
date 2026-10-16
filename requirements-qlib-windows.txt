@@ -1,0 +1,5 @@
+# Windows desktop workbench (native window through WebView2; pywebview brings pythonnet on Windows).
+# Install into the isolated Qlib env on Windows: scripts\windows\setup.ps1 does this.
+-r requirements-qlib-yahoo.txt
+-r requirements-qlib-table.txt
+pywebview==6.2.1

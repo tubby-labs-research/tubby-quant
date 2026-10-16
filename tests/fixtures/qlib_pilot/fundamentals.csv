@@ -1,0 +1,5 @@
+instrument,period_end,available_at,revision,field,value
+QLBA,2025-12-31,2026-01-07T20:00:00Z,rev1,book_value,100.00
+QLBA,2025-12-31,2026-01-14T20:00:00Z,rev2,book_value,96.00
+QLBB,2025-12-31,2026-01-08T22:00:00Z,rev1,book_value,200.00
+QLBC,2025-12-31,2026-01-06T20:00:00Z,rev1,book_value,60.00

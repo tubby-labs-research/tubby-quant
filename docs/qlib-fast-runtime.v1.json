@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "kind": "accepted_signed_runtime_profile",
+  "name": "accepted-v1",
+  "accepted_date": "2026-10-04",
+  "windows_engine_commit": "8ab6249aa6143cb0675259d5ff986d294e918ef4",
+  "macos_engine_commit": "d10a5a8ca397ea088da8f5c996e8bd042eea27e0",
+  "compiler": {
+    "folder": "ordered-numba-0.65.1-cp312-win64-v1",
+    "wheels": [
+      {
+        "filename": "numba-0.65.1-cp312-cp312-win_amd64.whl",
+        "url": "https://files.pythonhosted.org/packages/db/9e/3c679b2ee078425b9e99a91e44f8d132a6830d8ccce5227bc5e9181aeed8/numba-0.65.1-cp312-cp312-win_amd64.whl",
+        "sha256": "5971c632be2a2351500431f46213821dba8d02b18a9f7d02fd36bd2743e41a6a",
+        "size": 2750611
+      },
+      {
+        "filename": "llvmlite-0.47.0-cp312-cp312-win_amd64.whl",
+        "url": "https://files.pythonhosted.org/packages/2f/f5/d281ae0f79378a5a91f308ea9fdb9f9cc068fddd09629edc0725a5a8fde1/llvmlite-0.47.0-cp312-cp312-win_amd64.whl",
+        "sha256": "f3079f25bdc24cd9d27c4b2b5e68f5f60c4fdb7e8ad5ee2b9b006007558f9df7",
+        "size": 38138692
+      }
+    ]
+  },
+  "gzip": {
+    "folder": "isal-1.8.0-cp312-win64-v1",
+    "wheels": [
+      {
+        "filename": "isal-1.8.0-cp312-cp312-win_amd64.whl",
+        "url": "https://files.pythonhosted.org/packages/63/a0/3cdaac7caab7e5e2660afbf03d16616f8c3fb91ec3b75596e2388d42b90b/isal-1.8.0-cp312-cp312-win_amd64.whl",
+        "sha256": "1d376b7644434d50fedfb670483150ece64082212b6e1f23976f92a91fa1b99b",
+        "size": 203025
+      }
+    ]
+  },
+  "date_range": {
+    "folder": "date-range-buffer-cp312-win_amd64-public-v1",
+    "artifact": "session_loops.cp312-win_amd64.pyd",
+    "artifact_sha256": "20ef8147b397d47686146c22bd40bdacc5e1a152b3da2915ced4ab97684b3bd6",
+    "source_sha256": {
+      "qlib_yahoo/session_range_buffer.pyx": "48c641d31e55280f6a1087fbb0eba2ae6eae0abcd58b3fb798f72447690e55bd",
+      "qlib_yahoo/fast_signed.py": "5abd4863c48ea38b970790f8d48f6fd59e5c6eb451389baf721eab0cef724c42",
+      "scripts/build_qlib_session_loops.py": "bc92de10aa0ffd1a73e4796ac0a3ee0c600877599d8c0cc5003f050db3c6b07a"
+    },
+    "asset": "qlib-date-range-buffer-cp312-win_amd64-public-v1.zip",
+    "asset_sha256": "8b248b5d726f6488a8ec53b9ecbca783a0e24742d0f521c6c10c38e9880c7ce3",
+    "provenance_sha256": "21e2bb732162171818d2aa6ee63c370a4c49b0aec751981f3c1279f43a791843",
+    "public_api_only_certified": false,
+    "numpy_c_api_used": false,
+    "gil_held": true,
+    "compatibility": "CPython 3.12 Windows x64 only; verified original-Python date path on other hosts. The retained build uses acknowledged tools from an incomplete Visual Studio installation, not a healthy-toolchain certificate.",
+    "bundled_asset": "runtime-artifacts/qlib-date-range-buffer-cp312-win_amd64-public-v1.zip"
+  },
+  "macos_fallbacks": [
+    "native signed sequential fills on the pinned tubby.3 universal2 engine",
+    "original Python date-range checks",
+    "standard-library gzip level 6"
+  ]
+}

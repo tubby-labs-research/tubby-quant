@@ -1,0 +1,85 @@
+name: Framework checks
+
+"on": [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  linux-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: "1"
+      TUBBY_QLIB_DATA_ROOT: ${{ runner.temp }}/framework-tests
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install core numerical dependencies
+        run: python -m pip install numpy==1.26.4 pandas==2.2.3
+      - name: Run selected offline framework tests
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+          import sys
+          patterns = (
+              "test_qlib_yahoo_metrics.py",
+              "test_qlib_yahoo_expressions.py",
+              "test_qlib_public_examples.py",
+              "test_qlib_public_install.py",
+              "test_autoresearch_policy.py",
+              "test_autoresearch_models.py",
+              "test_autoresearch_records.py",
+              "test_autoresearch_controller.py",
+              "test_research_agents.py",
+          )
+          for pattern in patterns:
+              assert (Path("tests") / pattern).is_file(), pattern
+              subprocess.run([sys.executable, "-m", "unittest", "discover",
+                              "-s", "tests", "-p", pattern], check=True)
+
+  windows-environment:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: "1"
+      TUBBY_QLIB_DATA_ROOT: ${{ runner.temp }}/framework-tests
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Check Windows Python and package entrypoints
+        shell: python
+        run: |
+          from pathlib import Path
+          import os
+          import struct
+          import subprocess
+          import sys
+          import autoresearch
+          import qlib_yahoo
+          assert os.name == "nt" and struct.calcsize("P") == 8
+          assert sys.version_info[:2] == (3, 12)
+          assert Path(qlib_yahoo.DEFAULT_DATA_ROOT).resolve() == Path(os.environ["TUBBY_QLIB_DATA_ROOT"]).resolve()
+          subprocess.run([sys.executable, "-m", "autoresearch", "--help"], check=True)
+          subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests",
+                          "-p", "test_qlib_yahoo_metrics.py"], check=True)
+      - name: Check Windows installer encoding and launch handoff
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+          import sys
+          for pattern in ("test_qlib_signed_installer_encoding.py", "test_qlib_windows_packaging.py"):
+              assert (Path("tests") / pattern).is_file(), pattern
+              subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests",
+                              "-p", pattern], check=True)
