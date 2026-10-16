@@ -67,6 +67,7 @@ jobs:
           import struct
           import subprocess
           import sys
+          sys.path.insert(0, str(Path.cwd()))
           import autoresearch
           import qlib_yahoo
           assert os.name == "nt" and struct.calcsize("P") == 8
