@@ -14,18 +14,14 @@ Screen ideas in **Alpha Lab**, inspect simulation and accounting in **Qlib
 Validation**, and explore separate price/volume campaigns in **Research**.
 The framework does not place trades.
 
-> **Early research software preview.** Interfaces and saved formats may change.
-> Windows x64 has bounded installation and synthetic simulation evidence;
-> macOS is experimental, and Linux covers core checks only.
-
-> [!IMPORTANT]
-> **Synthetic examples, real interface.** Every screenshot below uses artificial
-> data. Positive and negative outcomes illustrate the software, not investment
-> performance or recommended strategies.
-
-**Console overview · SYNTHETIC TOY DATA**
+> **Real console, synthetic data.** Every screenshot illustrates the interface,
+> not investment performance or recommended strategies.
 
 ![Tubby Quant console using purpose-made synthetic toy data; not real-market investment evidence.](docs/images/console.jpg)
+
+**Early research software preview.** Interfaces and saved formats may change.
+Windows x64 has bounded installation and synthetic simulation evidence;
+macOS is experimental, and Linux covers core checks only.
 
 ## Three tools, distinct roles
 
