@@ -9,6 +9,7 @@ Tubby Quant is early-stage local research software; it does not place trades.
 | Alpha Lab screening, Qlib validation and Research | [User guide](USER_GUIDE.md) |
 | Fundamental definitions, discovery and raw records | [SEC fields](SEC_FIELDS_USER_GUIDE.md) |
 | Synthetic first run and your own datasets | [Data](DATA.md) |
+| Reproduce the README's artificial examples | [Screenshot examples](SCREENSHOTS.md) |
 | Accounting, historical-data and acceptance boundaries | [Limitations](LIMITATIONS.md) |
 | Components, storage and verified runtimes | [Architecture](ARCHITECTURE.md) |
 | Preview scope and verification boundaries | [Release notes](RELEASE_NOTES.md) |
