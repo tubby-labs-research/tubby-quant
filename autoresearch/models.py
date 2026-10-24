@@ -223,7 +223,7 @@ AGENT_CONTRACT_VERSION = "quant-research-agent-v1"
 
 class _NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise ModelError("agent redirects are not allowed")
+        raise ModelError("redirects are not allowed")
 
 
 class APIAgentModel(_BaseModel):
@@ -316,12 +316,134 @@ class APIAgentModel(_BaseModel):
         return response["candidates"]
 
 
+_LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+
+
+def _message_text(response):
+    """The assistant text of an OpenAI-style chat completion; string or text parts."""
+    try:
+        content = response["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        raise ModelError("chat completion lacks choices[0].message.content") from None
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [part.get("text", "") for part in content if isinstance(part, dict) and part.get("type") == "text"]
+        if parts:
+            return "".join(parts)
+    raise ModelError("chat completion content is not text")
+
+
+def _candidates_from_text(text):
+    """Parse the JSON array of candidates, tolerating a code fence or a single-key wrapper object."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.split("\n", 1)[1] if "\n" in stripped else ""
+        stripped = stripped.rsplit("```", 1)[0].strip()
+    try:
+        value = json.loads(stripped)
+    except json.JSONDecodeError as exc:
+        raise ModelError("model output is not the required JSON array") from exc
+    if isinstance(value, dict) and len(value) == 1 and isinstance(next(iter(value.values())), list):
+        value = next(iter(value.values()))
+    if not isinstance(value, list):
+        raise ModelError("model output is not the required JSON array")
+    return value
+
+
+class OpenAICompatibleModel(_BaseModel):
+    """Chat-completions adapter for OpenAI-compatible servers, without an SDK.
+
+    Works with the OpenAI API and with local servers that speak the same
+    protocol (vLLM, Ollama, LM Studio, llama.cpp). HTTPS is required except on
+    loopback, where an unauthenticated local server is allowed; redirects and
+    environment proxies are disabled; credentials come only from the named
+    environment variable. The system prompt and output contract are the same
+    as the Anthropic adapter's.
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+        if "api_key" in config:
+            raise ModelError("credentials must come from an environment variable")
+        if not isinstance(config.get("model"), str) or not config["model"].strip() or len(config["model"]) > 200:
+            raise ModelError("OpenAI-compatible model must be explicitly configured")
+        base_url = config.get("base_url", "https://api.openai.com/v1")
+        if not isinstance(base_url, str) or len(base_url) > 2000 or any(c.isspace() for c in base_url):
+            raise ModelError("invalid base_url")
+        url = urlparse(base_url)
+        try:
+            url.port
+        except ValueError as exc:
+            raise ModelError("invalid base_url port") from exc
+        self.loopback = url.hostname in _LOOPBACK
+        if (url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password
+                or url.query or url.fragment or (url.scheme == "http" and not self.loopback)):
+            raise ModelError("base_url requires HTTPS or loopback HTTP, without credentials or query parameters")
+        self.base_url = base_url.rstrip("/")
+        self.host = url.hostname
+        self.key_env = config.get("api_key_env", "OPENAI_API_KEY")
+        if self.key_env is not None and (not isinstance(self.key_env, str) or not re.fullmatch(r"[A-Za-z_]\w*", self.key_env)):
+            raise ModelError("api_key_env must be an environment variable name")
+        self.max_tokens = config.get("max_tokens", 4096)
+        self.timeout = config.get("timeout_seconds", 60)
+        self.temperature = config.get("temperature", 0)
+        if type(self.max_tokens) is not int or not 1 <= self.max_tokens <= 16000:
+            raise ModelError("max_tokens must be between 1 and 16000")
+        if type(self.timeout) not in (int, float) or not math.isfinite(self.timeout) or not 0 < self.timeout <= 120:
+            raise ModelError("model timeout must be between 0 and 120 seconds")
+        if type(self.temperature) not in (int, float) or not math.isfinite(self.temperature) or not 0 <= self.temperature <= 2:
+            raise ModelError("temperature must be between 0 and 2")
+
+    def identity(self):
+        return {**super().identity(), "endpoint_host": self.host, "temperature": self.temperature}
+
+    def _generate(self, mode, payload):
+        key = os.environ.get(self.key_env, "").strip() if self.key_env else ""
+        if not key and not self.loopback:
+            raise ModelError("configured OpenAI-compatible API-key environment variable is unset")
+        from qlib_yahoo.alphalab.engine import operator_names  # needs the numerical stack; after the cheap checks
+
+        supported_operators = operator_names()
+        if len(supported_operators) > 200:
+            raise ModelError("engine operator list exceeds prompt bound")
+        request = {"model": self.config["model"], "temperature": self.temperature, "max_tokens": self.max_tokens,
+                   "messages": [{"role": "system", "content": SYSTEM_PROMPT},
+                                {"role": "user", "content": json.dumps(
+                                    {"task": mode, "max_candidates": self.max_candidates,
+                                     "operator_names": supported_operators, **payload}, allow_nan=False)}]}
+        body = json.dumps(request, allow_nan=False).encode()
+        if len(body) > 2_000_000:
+            raise ModelError("model request exceeds byte limit")
+        headers = {"Accept": "application/json", "Content-Type": "application/json"}
+        if key:
+            headers["Authorization"] = "Bearer " + key
+        try:
+            opener = build_opener(_NoRedirect(), ProxyHandler({}))
+            with opener.open(Request(self.base_url + "/chat/completions", data=body, headers=headers, method="POST"),
+                             timeout=self.timeout) as response:
+                if response.status != 200 or response.headers.get_content_type() != "application/json":
+                    raise ModelError("chat completion requires HTTP 200 application/json")
+                raw = response.read(2_000_001)
+                if len(raw) > 2_000_000:
+                    raise ModelError("chat completion exceeds byte limit")
+                completion = json.loads(raw)
+        except ModelError:
+            raise
+        except Exception:
+            # Never expose URL, authorization, provider body or transport diagnostics.
+            raise ModelError("OpenAI-compatible generation failed; check the server connection") from None
+        return _candidates_from_text(_message_text(completion))
+
+
 def make_model(config):
     config = config.get("model", config) if isinstance(config.get("model"), dict) else config
     if config.get("provider") == "fixture":
         return FixtureModel(config)
     if config.get("provider") == "anthropic":
         return AnthropicModel(config)
+    if config.get("provider") == "openai":
+        return OpenAICompatibleModel(config)
     if config.get("provider") == "agent":
         return APIAgentModel(config)
-    raise ModelError("model provider must be explicitly fixture, anthropic or agent")
+    raise ModelError("model provider must be explicitly fixture, anthropic, openai or agent")

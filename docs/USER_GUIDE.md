@@ -29,6 +29,26 @@ Use **SEC fields** for fundamentals; see the [field guide](SEC_FIELDS_USER_GUIDE
 For scripts, `python -m qlib_yahoo alpha operators` lists supported operators.
 Use the installed environment's Python and put global `--data-root` before `alpha`.
 
+## Drive Alpha Lab from an agent (MCP)
+
+The framework ships a Model Context Protocol server so Claude Code, Codex or
+any MCP client can check and simulate alphas on your prepared data and read
+research reports, without shell access to the machine:
+
+```bash
+claude mcp add tubby-alpha-lab -- tubby-alpha-mcp --data-root ~/tubby-data
+```
+
+(`python -m qlib_yahoo.alphalab.mcp --data-root ~/tubby-data` without the
+package install.) Tools: `list_operators`, `check_expression`, `list_datasets`,
+`simulate_alpha`, `simulate_batch` (leaderboard and correlated pairs),
+`library_list` and the read-only `research_report`. Datasets are addressed by
+folder name under the data root; paths outside it are refused. The server
+performs no trading, no model calls, no data downloads, and never scores a
+research campaign's reserved holdout. Metrics are Alpha Lab's fixed-book,
+close-to-close results after the configured cost: research evidence, not a
+trading recommendation.
+
 ## Validate with Qlib
 
 Choose **Qlib Validation**, its dataset/universe and a native expression such as
@@ -45,6 +65,16 @@ Saved results retain original settings and provenance. Report generation can
 fail separately from simulation. Inspect diagnostics and retain the complete
 run folder for offline reports. A matching expression alone does not establish
 matching inputs, accounting or returns across engines.
+
+## Evidence, validation and portfolios
+
+Every submitted Lab, Qlib and portfolio attempt is recorded in a sealed,
+append-only store under the data root. Open **Evidence** to trace an attempt to
+its parents, preview and run a signed Qlib validation of a saved Lab result,
+combine one or two validated signals in one shared account with explicit risk
+limits, or declare a chronological protocol whose final window is scored once.
+The `tubby-qlib workflow` commands and loopback API expose the same steps. See
+[Evidence](EVIDENCE.md) for the exact contracts and refusals.
 
 ## Research campaigns
 
@@ -64,5 +94,17 @@ of the source distribution.
 Stop saves bounded-step recovery state; app closure stops its worker. Continuous
 mode runs while the app/process and machine remain available, within budgets.
 Review retained failures as well as successes. Promotion means further research,
-not Qlib validation or a trading recommendation. Reserved holdout is not scored.
+not Qlib validation or a trading recommendation. Research decisions never score
+the reserved holdout. When promoted candidates exist, `python -m autoresearch
+finalize <campaign.json>` scores each of them once on the holdout and records an
+immutable final with a `confirmed` / `not_confirmed` verdict; a repeated access
+is refused unless requested and is then labelled `reused`, and later hypotheses
+are labelled `post_holdout`. `python -m autoresearch export <campaign.json>
+--output promoted.txt` writes promoted (or `--decision confirmed`) expressions
+as an Alpha Lab batch file for Lab screening and Qlib validation;
+`python -m autoresearch report --markdown` summarises a campaign. The console
+offers the same as **Finalize on holdout** and **Send promoted to Alpha Lab**
+in the campaign header, shows finals beside each idea, and lists
+**OpenAI-compatible · direct model** as a research agent (`OPENAI_API_KEY` on
+the app process, or a loopback `QUANT_OPENAI_BASE_URL` for a local server).
 Research campaigns do not currently use SEC inputs or dated classification overlays.

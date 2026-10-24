@@ -12,7 +12,7 @@ import sqlite3
 import tempfile
 import threading
 
-COLLECTIONS = frozenset({'sources', 'hypotheses', 'experiments', 'reviews', 'events', 'campaigns'})
+COLLECTIONS = frozenset({'sources', 'hypotheses', 'experiments', 'reviews', 'events', 'campaigns', 'finals'})
 _SAFE_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z')
 
 

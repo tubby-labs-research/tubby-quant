@@ -16,6 +16,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Local Yahoo/Stooq OHLCV snapshots and Qlib backtests with a compact net ledger and optional HTML.")
     parser.add_argument("--data-root", type=Path, default=Path(DEFAULT_DATA_ROOT), help=f"Local storage root (default {DEFAULT_DATA_ROOT}; set TUBBY_QLIB_DATA_ROOT to change).")
     commands = parser.add_subparsers(dest="command", required=True)
+    from qlib_yahoo.workflow_cli import add_parser as add_workflow_parser
+    add_workflow_parser(commands)
     dictionary = commands.add_parser("sec-dictionary", help="Build, search or inspect a SEC dictionary.")
     dictionary.add_argument("dictionary_command", choices=("build", "search", "status", "prepare-execution"))
     dictionary.add_argument("--catalog", required=True, type=Path)
@@ -193,7 +195,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        if args.command == "prepare":
+        if args.command == "workflow":
+            from qlib_yahoo.workflow_cli import main as workflow_main
+            workflow_main(args)
+        elif args.command == "prepare":
             if args.symbols_file:
                 lines = args.symbols_file.read_text(encoding="utf-8").splitlines()
                 symbols = parse_symbols(line for line in lines if line.strip() and not line.lstrip().startswith("#"))

@@ -17,6 +17,37 @@ from typing import Any, Callable, Iterable
 from qlib_yahoo.dataset import DatasetError
 
 
+def _quality_errors(report: dict[str, Any]) -> list[str]:
+    """Conservative basic-scan gate, not PIT, adjustment or trading readiness.
+
+    Every anomaly count blocks automatic promotion, including heuristic warnings
+    (splits, extreme moves and stale prices). Ended listings are informational:
+    delistings are expected in historical data. Low-price counts likewise are
+    descriptive, not violations of a new price-floor policy. Missing/malformed
+    counts and empty member coverage fail closed; no implicit warning waiver.
+    """
+    totals = report["totals"]
+    errors = []
+    for key in ("possible_unadjusted_splits", "possible_unadjusted_reverse_splits",
+                "possible_unadjusted_splits_in_universe", "extreme_moves_in_universe",
+                "stale_member_days", "inconsistent_ohlc_bars", "members_that_ended"):
+        value = totals[key]
+        if type(value) is not int or value < 0:
+            raise ValueError(f"Invalid quality count: {key}")
+        if value and key != "members_that_ended":
+            errors.append(f"{key}={value}")
+    rows = report["by_year"]
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("Quality scan has no member coverage")
+    for row in rows:
+        days, missing = row["member_days"], row["member_days_without_close"]
+        if type(days) is not int or days <= 0 or type(missing) is not int or not 0 <= missing <= days:
+            raise ValueError("Invalid quality member coverage")
+        if missing:
+            errors.append(f"member_days_without_close={missing} (year {row['year']})")
+    return errors
+
+
 def ticker_list(screener_path: Path, previous_tables: Iterable[Path] = ()) -> list[str]:
     """Screener stocks (Nasdaq's symbol style converted) plus tickers from earlier tables."""
     from qlib_yahoo.reference import Screener
@@ -39,11 +70,17 @@ def refresh(data_root: Path, *, previous_tables: Iterable[Path] = (), chart_star
             import_start: str = "2010-01-01", min_price: float = 1.0, universe_size: int = 3000,
             make_latest: bool = False, workers: int = 6, progress: Callable[[str], None] | None = None,
             fetch: Callable[..., Any] | None = None, opener: Callable[..., Any] | None = None) -> dict[str, Any]:
-    """Run every step; return the paths produced and the quality summary."""
+    """Prepare, qualify, then optionally promote; rejected scans raise DatasetError.
+
+    Scan exceptions propagate after recording failure. Neither failure path
+    changes the default. Successful receipts retain the historical quality totals
+    and add basic-scan qualification and promotion outcomes.
+    """
     from qlib_yahoo.data_quality import scan, summary_lines
     from qlib_yahoo.reference import fetch_screener
     from qlib_yahoo.stooq_table import prepare_stooq_table
     from qlib_yahoo.universe import UniverseRule
+    from qlib_yahoo.workspace import set_default_dataset
     from qlib_yahoo.yahoo_chart import fetch_archive, fetch_chart
     from qlib_yahoo.yahoo_table import build_table
 
@@ -71,12 +108,39 @@ def refresh(data_root: Path, *, previous_tables: Iterable[Path] = (), chart_star
     say(f"4/5 Snapshot {import_start} to {end} (end exclusive), TOP{universe_size}, min price {min_price:g}")
     snapshot = prepare_stooq_table(table, data_root, import_start, end,
                                    rule=UniverseRule(name=f"top{universe_size}", size=universe_size, min_price=min_price),
-                                   groups=screener, make_latest=make_latest, progress=say)
-    say("5/5 Quality scan")
-    report = scan(snapshot)
-    for line in summary_lines(report):
-        say(line)
+                                   groups=screener, make_latest=False, progress=say)
     record = {"created_at_utc": now.isoformat(), "screener": str(screener), "charts": str(charts), "table": str(table),
-              "snapshot": str(snapshot), "tickers": len(tickers), "quality": report["totals"]}
-    (table_dir / "refresh.json").write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
+              "snapshot": str(snapshot), "tickers": len(tickers), "quality": None,
+              "qualification_scope": "basic_price_scan_only_not_pit_readiness",
+              "qualification_policy": "refresh-basic-scan-v1-zero-anomalies",
+              "qualified": False, "promoted": False, "promotion_requested": bool(make_latest),
+              "status": "scan_failed"}
+
+    def receipt() -> None:
+        (table_dir / "refresh.json").write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
+
+    try:
+        say("5/5 Quality scan")
+        report = scan(snapshot)
+        errors = _quality_errors(report)
+        record["quality"] = report["totals"]
+        for line in summary_lines(report):
+            say(line)
+    except Exception as error:
+        record["error"] = str(error) or type(error).__name__
+        receipt()
+        raise
+    record.update(qualified=not errors, status="rejected" if errors else "qualified", quality_errors=errors)
+    receipt()  # Require a persisted qualification before changing the default.
+    if errors:
+        raise DatasetError("Refresh quality rejected; default unchanged: " + "; ".join(errors))
+    if make_latest:
+        try:
+            set_default_dataset(data_root, snapshot)  # Existing ready/price checks and atomic pointer replacement.
+        except Exception as error:
+            record.update(status="promotion_failed", error=str(error) or type(error).__name__)
+            receipt()
+            raise
+        record.update(promoted=True, status="promoted")
+        receipt()
     return record

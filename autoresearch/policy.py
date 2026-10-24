@@ -90,3 +90,49 @@ def assess(result, config, parent_result=None):
     return _answer('refine', 'Positive validation evidence misses configured gates: ' + weak,
                    'Can a mechanism-grounded change improve ' + weak + ' on validation?',
                    'Improve the failed validation gates while retaining positive returns after costs.')
+
+
+FINAL_DEFAULTS = {'min_holdout_days': 20, 'min_holdout_sharpe': 0.0}
+
+
+def assess_final(result, config):
+    """Deterministic confirmation gate for one sealed holdout evaluation.
+
+    ``confirmed`` means the reserved period agreed with validation after costs
+    over at least ``min_holdout_days`` sessions with Sharpe above
+    ``min_holdout_sharpe``. It is evidence for further research, not a trading
+    recommendation. A repeated access of the same holdout is never confirmed:
+    repeated selection turns the holdout into development evidence.
+    """
+    if not isinstance(result, dict) or result.get('status') != 'ok':
+        return _answer('repair', 'Holdout evaluation failed or has no successful status; repair the operational error.')
+    if not isinstance(config, dict):
+        return _answer('repair', 'Policy config must be a mapping.')
+    supplied = config.get('policy', config)
+    if not isinstance(supplied, dict):
+        return _answer('repair', 'Policy config must be a mapping.')
+    gates = dict(FINAL_DEFAULTS, **{k: v for k, v in supplied.items() if k in FINAL_DEFAULTS})
+    for key in FINAL_DEFAULTS:
+        if not _finite(gates[key]):
+            return _answer('repair', 'Invalid policy threshold: ' + key)
+    if gates['min_holdout_days'] < 2:
+        return _answer('repair', 'Policy thresholds have invalid ranges.')
+    metrics = (result.get('metrics') or {}).get('holdout')
+    if not isinstance(metrics, dict):
+        return _answer('repair', 'Holdout evaluation lacks structured metrics.')
+    days = metrics.get('days')
+    if not _finite(days) or days < 0 or int(days) != days:
+        return _answer('repair', 'Holdout trading-day count is missing or invalid.')
+    if days < gates['min_holdout_days']:
+        return _answer('insufficient', 'Too few holdout trading days for the configured policy.')
+    for key in ('sharpe', 'returns'):
+        if not _finite(metrics.get(key)):
+            return _answer('repair', 'Holdout metric is missing or nonfinite: ' + key)
+    if result.get('reused'):
+        return _answer('not_confirmed', 'A reused holdout is further research, not an untouched final test.')
+    if metrics['returns'] <= 0 or metrics['sharpe'] <= 0:
+        return _answer('not_confirmed', 'Holdout evidence is nonpositive after configured costs.')
+    if metrics['sharpe'] < gates['min_holdout_sharpe']:
+        return _answer('not_confirmed', 'Holdout Sharpe is below the configured minimum.')
+    return _answer('confirmed', 'Reserved holdout agreed with validation after costs; evidence for deeper research only.')
+

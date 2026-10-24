@@ -1,5 +1,62 @@
 # Release notes
 
+## v0.2.0 — 2026-10-24
+
+The second research preview makes the framework installable as a package,
+usable from agents, and closes the research loop end to end.
+
+- **Packaging.** `pip install -e .` installs Alpha Lab, Research, the console and
+  the data adapters on Windows, macOS and Linux with the commands `tubby-quant`,
+  `tubby-qlib`, `tubby-research` and `tubby-alpha-mcp`. Extras `qlib`, `table`,
+  `desktop` and `research` mirror the pinned requirement files. The signed Qlib
+  runtime still uses the platform setup scripts and their verification.
+- **MCP server.** `tubby-alpha-mcp` exposes `list_operators`, `check_expression`,
+  `list_datasets`, `simulate_alpha`, `simulate_batch`, `library_list` and a
+  read-only `research_report` over stdio to Claude Code, Codex or any MCP client,
+  contained in one data root; no trading, model calls or downloads.
+- **Research loop.** `tubby-research finalize` scores promoted hypotheses once on
+  the reserved holdout, reserving the access before the run and labelling any
+  repeat as reused; `export` writes promoted, confirmed or all candidates as an
+  Alpha Lab batch; `report --markdown` summarises a campaign; `"provider": "openai"`
+  adds a chat-completions adapter for the OpenAI API and loopback-hosted compatible
+  servers. The console offers *Finalize on holdout* and *Send promoted to Alpha
+  Lab*, shows finals beside each idea, and lists the OpenAI-compatible provider.
+- **Evidence.** The console's new Evidence view and `tubby-qlib workflow`
+  commands record every submitted Lab, Qlib and portfolio attempt in a sealed,
+  append-only store under the data root; a saved Lab result can be previewed and
+  validated in signed Qlib, one or two validated signals can share one account
+  under explicit risk limits, and chronological protocols reserve their final
+  window before it is scored. See [Evidence](EVIDENCE.md).
+- **Alpha Lab engine.** Overflow becomes missing instead of infinite, an empty
+  side of `scale` no longer poisons a day, arbitrary series used as groups no
+  longer allocate by label value, `group_zscore` uses a two-pass variance,
+  `group_rank` is one lexsort, `ts_arg_max/min` work in bounded blocks, `clamp`
+  rejects an empty interval and wrong-typed options raise positioned expression
+  errors. New reference tests pin these and previously untested operators.
+- **Compatibility.** The offline suite runs on macOS through `scripts/run_tests.py`
+  (canonical temporary root); the signed holding-series fast path accepts
+  pandas 3's default microsecond dates and string dtype.
+- **Documentation.** README repositioned around the offline BRAIN-style
+  simulator, auditable validation, the research loop and agent access.
+
+### Verification scope for v0.2.0
+
+macOS 15 (arm64) with CPython 3.12. The private source tree's full offline suite
+passed in three environments, pinned numpy 1.26.4 / pandas 2.2.3, numpy 2.3 /
+pandas 3.1 with PyArrow, and a numpy-free interpreter (2,245 tests each,
+synthetic fixtures only). This exported tree was then tested in a disposable
+clone: a clean `pip install -e .` environment (numpy 2.5 / pandas 2.3), the
+pinned environment and the pandas 3 environment each ran its offline suite
+(1,971 tests each, no failures; 522 skipped without the optional runtimes,
+380 with PyArrow); the four
+commands, the synthetic research demo, the MCP handshake and the token-guarded
+console server with its Evidence listing were exercised. In the private tree the
+console's finalize path and the hand-off to Alpha Lab were also exercised in a
+browser. Hosted checks on the merged private revisions covered the bounded Linux
+core suite and Windows import/installer checks. The signed runtime remains
+verified on Windows x64 only; macOS remains experimental and Linux has no pinned
+signed runtime. Nothing here establishes trading readiness.
+
 ## Initial research software preview
 
 Tubby Quant is a local workbench for daily equity alpha research. This preview

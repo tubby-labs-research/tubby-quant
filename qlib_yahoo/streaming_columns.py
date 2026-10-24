@@ -36,7 +36,85 @@ def position_table(position, shared, equity, schema):
     columns = {name: [value] * count for name, value in shared.items()}
     columns.update(instrument=instruments, amount=amounts, price=prices,
                    value=values, weight=weights)
+    broadcast = _position_shared_broadcast(columns, schema, count, equity)
+    if broadcast is not None:
+        return pa.Table.from_pydict(broadcast, schema=schema)
     return pa.Table.from_pydict(columns, schema=schema)
+
+
+def _position_shared_broadcast(columns, schema, count, equity):
+    """Use public Arrow scalar repetition only for callback-free plain values.
+
+    Guards run after the unchanged sorted getters/math and original dictionary
+    construction. If *any* column is unsupported, retain the whole original
+    from_pydict conversion, including custom conversion counts/error order.
+    Repeated Python-list NaNs are valid values, so explicitly avoid Pandas null
+    inference. No financial value, timestamp unit or schema metadata is changed.
+    """
+    from datetime import datetime
+    import numpy as np
+    import pandas as pd
+    import pyarrow as pa
+
+    # Direct callers may supply custom equity whose division produces arbitrary
+    # weight objects. Do not convert any shared scalar ahead of those objects.
+    # Identity checks also avoid custom metaclass equality callbacks. The
+    # original arithmetic/getter sequence above still runs exactly once.
+    if not any(type(equity) is allowed for allowed in (
+            float, int, np.float16, np.float32, np.float64)):
+        return None
+    varying = {"instrument": pa.string(), "amount": pa.float64(),
+               "price": pa.float64(), "value": pa.float64(), "weight": pa.float64()}
+    plain_types = (type(pa.float64()), type(pa.bool_()), type(pa.string()), type(pa.timestamp('ns')))
+    if (not hasattr(pa, 'repeat') or type(schema) is not pa.Schema
+            or any(type(name) is not str for name in columns)
+            or any(not any(type(field.type) is allowed for allowed in plain_types) for field in schema)
+            or len(schema.names) != len(columns) or set(schema.names) != set(columns)
+            or any(name not in columns or schema.field(name).type != dtype
+                   for name, dtype in varying.items())
+            or any(type(symbol) is not str for symbol in columns['instrument'])):
+        return None
+    numeric = (float, int, np.float16, np.float32, np.float64,
+               np.int8, np.int16, np.int32, np.int64,
+               np.uint8, np.uint16, np.uint32, np.uint64)
+    fields = []
+    for field in schema:
+        if field.name in varying:
+            continue
+        value = columns[field.name][0]
+        kind = type(value)
+        dtype = field.type
+        if value is None:
+            if dtype not in (pa.float64(), pa.bool_(), pa.string()) and not (
+                    pa.types.is_timestamp(dtype) and dtype.tz is None
+                    and dtype.unit in ('s', 'ms', 'us', 'ns')):
+                return None
+        elif dtype == pa.float64():
+            if not any(kind is allowed for allowed in numeric):
+                return None
+        elif dtype == pa.bool_():
+            if kind is not bool and kind is not np.bool_:
+                return None
+        elif dtype == pa.string():
+            if kind is not str and kind is not np.str_:
+                return None
+        elif pa.types.is_timestamp(dtype) and dtype.tz is None and dtype.unit in ('s', 'ms', 'us', 'ns'):
+            if kind is not datetime and kind is not pd.Timestamp and kind is not np.datetime64:
+                return None
+            if (kind is datetime or kind is pd.Timestamp) and value.tzinfo is not None:
+                return None
+        else:
+            return None
+        fields.append((field.name, value, dtype))
+    # Only exact builtin/NumPy/Pandas scalars reach this conversion. A rejected
+    # overflow/unit/string encoding must still raise from the original table
+    # conversion, at its original column, with no custom callbacks invoked here.
+    try:
+        repeated = {name: pa.repeat(pa.scalar(value, type=dtype, from_pandas=False), count)
+                    for name, value, dtype in fields}
+    except (pa.ArrowException, ValueError, OverflowError, TypeError):
+        return None
+    return {**columns, **repeated}
 
 
 def order_indicator_table(raw, day, schema):

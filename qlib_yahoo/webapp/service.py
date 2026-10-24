@@ -27,6 +27,7 @@ from typing import Any, Callable
 
 from qlib_yahoo.dataset import DatasetError
 from qlib_yahoo.workbench_store import Annotations, factor_key
+from qlib_yahoo.workflow_submission import current_submission, record_console_submission
 from qlib_yahoo.workspace import (
     ALL_SYMBOLS, EXAMPLE_ALPHAS, SHORT_WINDOW_SESSIONS, STAGE_PREFIXES, dataset_summary, latest_dataset, list_datasets,
     list_runs, parse_backtest_options, parse_import_options, session_count, set_default_dataset,
@@ -100,6 +101,8 @@ class JobRecord:
         self.count = 0
         self.lock = threading.Lock()
         self.cancel_hook: Callable[[], bool] | None = None
+        self.attempt_id: str | None = None
+        self.receipt: dict[str, Any] | None = None
 
     def add(self, text: str) -> None:
         with self.lock:
@@ -109,12 +112,16 @@ class JobRecord:
     def public(self, since: int = 0) -> dict[str, Any]:
         with self.lock:
             lines = [text for number, text in self.lines if number > since]
-            return {"id": self.id, "kind": self.kind, "label": self.label, "state": self.state,
+            value = {"id": self.id, "kind": self.kind, "label": self.label, "state": self.state,
                     "started": self.started, "finished": self.finished,
                     "elapsed": (self.finished or time.time()) - self.started,
                     "progress": self.progress, "progress_label": self.progress_label, "stage": self.stage,
                     "result": self.result, "error": self.error, "log": lines, "log_index": self.count,
+                    "attempt_id": self.attempt_id,
                     "cancellable": self.cancel_hook is not None and self.state == "running"}
+            if self.kind in ("chronology-trial", "chronology-final"):
+                value.update(result_kind="chronology", run_path=self.result, receipt=self.receipt)
+            return value
 
 
 class ConsoleService:
@@ -670,11 +677,24 @@ class ConsoleService:
             except ValueError as exc:
                 raise ServiceError(str(exc)) from exc
 
+    def finalize_research(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Score promoted ideas once on a campaign's reserved holdout; shares the task gate like a start."""
+        with self._lock:
+            if self.current is not None and self.current.state == "running":
+                raise ServiceError("Another task is running. Stop it before finalizing research.")
+            try:
+                return self.research.finalize(data)
+            except ValueError as exc:
+                raise ServiceError(str(exc)) from exc
+
     def _start(self, kind: str, label: str, request: dict[str, Any], work: Callable[[JobRecord], str]) -> dict[str, Any]:
         with self._lock:
             if self.busy():
                 raise ServiceError("Another task is running. Wait for it to finish or cancel it.")
             record = JobRecord(kind, label, request)
+            submission = current_submission()
+            if submission:
+                record.attempt_id = submission["id"]
             self.current = record
             self.jobs[record.id] = record
             while len(self.jobs) > 50:
@@ -683,23 +703,45 @@ class ConsoleService:
         def run() -> None:
             from qlib_yahoo.jobs import JobCancelled
 
+            outcome = "failed"
             try:
                 record.result = work(record)
-                record.state = "completed"
+                if record.receipt is not None and record.receipt.get("status") not in ("completed", "reused"):
+                    raise DatasetError("Chronology numerical outcome: " + str(record.receipt.get("status"))
+                                       + ". Inspect the retained receipt and child attempts.")
+                outcome = "completed"
                 record.stage = "Completed"
                 record.add(f"Completed: {record.result}")
             except JobCancelled as exc:
-                record.state = "cancelled"
+                outcome = "cancelled"
                 record.stage = "Cancelled"
+                record.error = str(exc)
                 record.add(str(exc))
             except Exception as exc:
-                record.state = "failed"
+                outcome = "failed"
                 record.error = str(exc) or type(exc).__name__
                 record.stage = "Failed"
                 record.add(f"Error: {record.error}")
             finally:
-                record.finished = time.time()
-                record.cancel_hook = None
+                if record.attempt_id:
+                    from qlib_yahoo.workflow_records import EvidenceStore
+                    try:
+                        EvidenceStore(self.data_root).finish(
+                            record.attempt_id, outcome,
+                            result={"result_path": record.result} if record.result else None,
+                            error=record.error,
+                        )
+                    except Exception as exc:
+                        outcome = "failed"
+                        record.error = f"Could not seal submission evidence: {exc}"
+                        record.stage = "Evidence persistence failed"
+                        record.add(record.error)
+                # A terminal UI state promises that durable invocation evidence
+                # has already been sealed (or its persistence error reported).
+                with record.lock:
+                    record.finished = time.time()
+                    record.cancel_hook = None
+                    record.state = outcome
 
         record.add(label)
         threading.Thread(target=run, name=f"job-{record.id}", daemon=True).start()
@@ -708,7 +750,11 @@ class ConsoleService:
     def _run_worker(self, record: JobRecord, request: dict[str, Any]) -> str:
         from qlib_yahoo.jobs import progress_fraction
 
-        job = self.job_factory(request)
+        submitted_request = dict(request)
+        if record.attempt_id:
+            submitted_request["_workflow"] = {"data_root": str(self.data_root),
+                                               "parents": [record.attempt_id]}
+        job = self.job_factory(submitted_request)
         record.cancel_hook = job.cancel
 
         def line(text: str) -> None:
@@ -733,8 +779,22 @@ class ConsoleService:
                 record.progress, record.progress_label = None, ""  # a new stage; the old bar is finished
             record.add(text)
 
-        return str(job.run(line))
+        result = job.run(line)
+        if record.kind in ("chronology-trial", "chronology-final"):
+            from qlib_yahoo.workflow_records import EvidenceStore, _checked
+            store = EvidenceStore(self.data_root)
+            path = _checked(Path(result))
+            if path.parent != store.root / "results" or path.suffix != ".json":
+                raise ServiceError("chronology worker returned a receipt outside workflow/results")
+            receipt = store.get_result(path.stem)
+            phase = "final" if record.kind == "chronology-final" else None
+            if (not isinstance(receipt, dict) or receipt.get("schema_version") != 1
+                    or receipt.get("phase") not in ((phase,) if phase else ("development", "validation"))):
+                raise ServiceError("chronology worker returned an incompatible receipt")
+            record.receipt = receipt
+        return str(result)
 
+    @record_console_submission("console-backtest")
     def start_backtest(self, params: dict[str, Any]) -> dict[str, Any]:
         reject_recovery_options(params)
         lines = _alpha_lines(str(params.get("alpha") or ""))
@@ -983,6 +1043,7 @@ class ConsoleService:
         return {"ok": all(item["ok"] for item in lines) and bool(lines), "lines": lines,
                 "group_consumers": sorted(group_consumers), **self._sec_preview(config)}
 
+    @record_console_submission("console-lab")
     def start_alpha(self, params: dict[str, Any]) -> dict[str, Any]:
         from dataclasses import asdict
 
@@ -1069,6 +1130,128 @@ class ConsoleService:
                                 "drawdown": drawdown[::step]}
         return _json_safe(result)
 
+    def workflow_attempts(self, limit=100):
+        from qlib_yahoo.workflow_records import EvidenceStore
+
+        if type(limit) is not int or not 1 <= limit <= 500:
+            raise ServiceError("Choose between 1 and 500 recent attempts.")
+        store = EvidenceStore(self.data_root)
+        records = {}
+
+        def metadata(identity):
+            if identity not in records:
+                records[identity] = store.get(identity, verify_result=False)
+            return records[identity]
+
+        def label(row):
+            record = metadata(row["id"])
+            request = record["request"]
+            params = request.get("parameters", request)
+            if isinstance(params, dict):
+                for key in ("expression", "alpha"):
+                    if isinstance(params.get(key), str) and params[key].strip():
+                        return params[key][:160]
+                if isinstance(params.get("account_id"), str):
+                    return "Portfolio: " + params["account_id"][:120]
+            if row["kind"] == "candidate-validation":
+                for parent in record["parents"]:
+                    source = metadata(parent)
+                    if source["kind"] == "lab-evaluation":
+                        return str(source["request"].get("expression") or "Saved Lab candidate")[:160]
+            expressions = request.get("expressions")
+            if isinstance(expressions, list):
+                return f"{len(expressions)} submitted expressions"
+            return row["kind"].replace("-", " ")
+
+        return [{**row, "display_label": label(row),
+                 "integrity_scope": "metadata_only_open_to_verify_result"}
+                for row in store.list_attempts(limit=limit, verify_results=False)]
+
+    def workflow_detail(self, attempt_id):
+        from qlib_yahoo.workflow_records import EvidenceStore
+
+        store = EvidenceStore(self.data_root)
+        attempt = store.get(attempt_id)
+        result = store.get_result(attempt["result_digest"]) if attempt["result_digest"] else None
+        if isinstance(result, dict):
+            result = {key: value for key, value in result.items()
+                      if key not in {"daily", "yearly", "weights"}}
+        return _json_safe({"attempt": attempt, "result": result})
+
+    def workflow_recover(self):
+        from qlib_yahoo.workflow_recovery import recover
+        return recover(self.data_root)
+
+    def workflow_preview(self, params):
+        from qlib_yahoo.validation_workflow import preview_validation
+
+        preview = preview_validation(self.data_root, params)
+        self._inside(preview["dataset"], "datasets")
+        return _json_safe(preview)
+
+    @record_console_submission("console-candidate-validation")
+    def start_candidate_validation(self, params):
+        preview = self.workflow_preview(params)
+        request = {"kind": "candidate-validation", "data_root": str(self.data_root),
+                   "parameters": params}
+        label = f"Validate saved Lab candidate: {preview['expression'][:70]}"
+        return self._start("candidate-validation", label, request,
+                           lambda record: self._run_worker(record, request))
+
+    def workflow_portfolio_preview(self, params):
+        from qlib_yahoo.portfolio_workflow import preview_portfolio
+
+        preview = preview_portfolio(self.data_root, params)
+        self._inside(preview["dataset"], "datasets")
+        if preview["request"]["group_overlay"] is not None:
+            self._inside(preview["request"]["group_overlay"], "classifications")
+        return _json_safe(preview)
+
+    @record_console_submission("console-portfolio-validation")
+    def start_portfolio_validation(self, params):
+        preview = self.workflow_portfolio_preview(params)
+        request = {"kind": "portfolio-validation", "data_root": str(self.data_root),
+                   "parameters": preview["request"]}
+        return self._start("portfolio-validation", f"Portfolio: {preview['policy']['account_id']}", request,
+                           lambda record: self._run_worker(record, request))
+
+    def workflow_chronology_preview(self, params):
+        from qlib_yahoo.chronology_workflow import preview_chronology
+        return preview_chronology(self.data_root, params)
+
+    @record_console_submission("console-chronology-declare")
+    def workflow_chronology_declare(self, params):
+        from qlib_yahoo.chronology_workflow import declare_chronology
+        result = declare_chronology(self.data_root, params)
+        return {**result, "submission_attempt_id": current_submission()["id"]}
+
+    @record_console_submission("console-chronology-freeze")
+    def workflow_chronology_freeze(self, params):
+        from qlib_yahoo.chronology_workflow import freeze_chronology_selection
+        result = freeze_chronology_selection(self.data_root, params)
+        return {**result, "submission_attempt_id": current_submission()["id"]}
+
+    def workflow_chronology_view(self, params):
+        from qlib_yahoo.chronology_workflow import view_chronology
+        return view_chronology(self.data_root, params)
+
+    @record_console_submission("console-chronology-trial")
+    def start_chronology_trial(self, params):
+        return self._start_chronology("chronology-trial", params)
+
+    @record_console_submission("console-chronology-final")
+    def start_chronology_final(self, params):
+        return self._start_chronology("chronology-final", params)
+
+    def _start_chronology(self, kind, params):
+        from qlib_yahoo.workflow_records import canonical_json_bytes
+        canonical_json_bytes(params)
+        if type(params) is not dict:
+            raise ServiceError("chronology parameters must be a JSON object")
+        request = {"kind": kind, "data_root": str(self.data_root), "parameters": params}
+        return self._start(kind, "Chronology: " + kind.split("-")[1], request,
+                           lambda record: self._run_worker(record, request))
+
     def alpha_batch(self, path: str) -> dict[str, Any]:
         from qlib_yahoo.alphalab.batch import correlation
 
@@ -1077,14 +1260,34 @@ class ConsoleService:
             record = json.loads(batch.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             raise ServiceError(f"Cannot read the batch: {exc}") from exc
-        library = self._alpha_library()
+        library = None
+        evidence = record.get("evidence")
+        if evidence is not None and (not isinstance(evidence, list) or len(evidence) != len(record["ids"])):
+            raise ServiceError("Saved batch evidence does not match its result inventory.")
+        if evidence is not None:
+            from qlib_yahoo.workflow_records import EvidenceStore
+            store = EvidenceStore(self.data_root)
         rows, series = [], {}
-        for identifier in record["ids"]:
-            result = library.get(identifier, include_errors=True) or {"expression": "", "error": "not in the library"}
+        for index, identifier in enumerate(record["ids"]):
+            link = evidence[index] if evidence is not None else None
+            if link and link.get("attempt_id") and link.get("result_digest"):
+                attempt = store.get(link["attempt_id"])
+                if attempt["result_digest"] != link["result_digest"]:
+                    raise ServiceError("Saved batch attempt/result identity differs.")
+                result = store.get_result(link["result_digest"])
+                if result.get("id") != identifier:
+                    raise ServiceError("Saved batch candidate identity differs.")
+            else:
+                # Old batches did not retain immutable versions; never invent them.
+                library = library or self._alpha_library()
+                result = library.get(identifier, include_errors=True) or {"expression": "", "error": "not in the library"}
             row = {"id": identifier, "expression": result.get("expression"), "error": result.get("error"),
                    "engine": result.get("engine"),
                    "summary": result.get("summary"), "checks": result.get("checks"),
-                   "self_correlation": result.get("self_correlation")}
+                   "self_correlation": result.get("self_correlation"),
+                   "attempt_id": link.get("attempt_id") if link else None,
+                   "result_digest": link.get("result_digest") if link else None,
+                   "evidence_status": "immutable" if link and link.get("result_digest") else "legacy_mutable"}
             rows.append(row)
             if "daily" in result and "error" not in result:
                 series[identifier] = (result["daily"]["dates"], result["daily"]["pnl"])
