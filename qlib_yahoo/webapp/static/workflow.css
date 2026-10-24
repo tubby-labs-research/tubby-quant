@@ -1,0 +1,63 @@
+/* Evidence uses the current console shell and job panel. */
+body[data-view=evidence] .body,
+body.no-inspector[data-view=evidence] .body { grid-template-columns: 56px var(--explorer-w) 1px minmax(0, 1fr) 0 0; }
+body[data-view=evidence] #inspector,
+body[data-view=evidence] [data-resize=inspector],
+body[data-view=evidence] #toggle-inspector,
+body[data-view=evidence] #sec-open,
+body[data-view=evidence] #sb-dataset,
+body[data-view=evidence] .research-only { display: none; }
+.wf-workspace { overflow: auto; padding: 20px; gap: 14px; }
+body[data-view=evidence] .wf-workspace { grid-row: 2; }
+body[data-view=evidence] .console-notices { grid-row: 1; }
+.wf-workspace.active { display: block; }
+.wf-workspace h2, .wf-workspace h3, .wf-workspace h4 { margin: 0 0 10px; }
+.wf-workspace p { margin: 10px 0; }
+.wf-note { color: var(--t3); padding: 8px 12px; font-size: 12px; }
+.wf-workspace > .wf-note { padding: 0; }
+.wf-card { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); margin: 12px 0; padding: 14px; }
+.wf-card summary { cursor: pointer; }
+.wf-workspace details.wf-card { margin: 6px 0; padding: 7px 10px; }
+.wf-workspace .wf-note { padding: 0; }
+.wf-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); gap: 8px 12px; margin: 10px 0; }
+.wf-summary > div { display: grid; gap: 2px; }
+.wf-summary small, .wf-portfolio-leg small { color: var(--t3); }
+.wf-summary strong { font-variant-numeric: tabular-nums; }
+.wf-portfolio-leg { display: grid; gap: 3px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.wf-omissions { padding: 8px 10px; border-left: 3px solid var(--warn); background: var(--panel); }
+.wf-facts { margin: 12px 0; }
+.wf-facts dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.wf-facts dt { color: var(--t3); }
+.wf-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.wf-actions button { overflow-wrap: anywhere; white-space: normal; }
+.wf-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.wf-fields label { display: grid; gap: 6px; }
+.wf-fields input { min-width: 0; width: 100%; }
+.wf-fields select { min-width: 0; width: 100%; }
+.wf-fields input, .wf-fields select { background: var(--center); border: 1px solid var(--border); border-radius: 4px; padding: 6px; }
+.wf-fields small { color: var(--t3); }
+.wf-leg { grid-template-columns: minmax(0, 2fr) minmax(140px, 1fr); margin: 12px 0; }
+.wf-facts dt { overflow-wrap: anywhere; }
+#wf-p-message, #wf-recovery { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 1000px) { .wf-leg { grid-template-columns: minmax(0, 1fr); } }
+.wf-attempt { display: flex; flex-direction: column; text-align: left; gap: 5px; padding: 12px; width: 100%; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.wf-attempt.active, .wf-attempt:hover { background: var(--panel); }
+.wf-attempt.active { box-shadow: inset 3px 0 var(--accent); }
+.wf-attempt code { font-size: 10px; }
+.wf-attempt small { color: var(--t3); }
+.wf-error { border-left: 3px solid var(--neg); padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wf-facts dd > .wf-facts { margin: 0; }
+.wf-facts ul { margin: 0; padding-left: 18px; }
+.wf-workspace { user-select: text; -webkit-user-select: text; }
+#wf-message { white-space: pre-wrap; overflow-wrap: anywhere; }
+.wf-windows { margin: 12px 0; }
+.wf-windows fieldset { min-width: 0; border: 1px solid var(--border); border-radius: 4px; }
+.wf-windows legend { text-transform: capitalize; }
+.wf-c-text { display: grid; gap: 6px; margin: 10px 0; }
+.wf-c-text textarea { width: 100%; min-width: 0; resize: vertical; padding: 6px; color: inherit; background: var(--center); border: 1px solid var(--border); border-radius: 4px; }
+.wf-check { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; overflow-wrap: anywhere; }
+.wf-check input { flex: 0 0 auto; margin-top: 3px; }
+.wf-chronology-row { border-bottom: 1px solid var(--border); padding: 8px 0; }
+.wf-chronology-row small { color: var(--t3); }
+#wf-c-message { white-space: pre-wrap; overflow-wrap: anywhere; }
+#wf-c-protocol > section { margin-top: 18px; }

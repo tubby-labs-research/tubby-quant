@@ -234,9 +234,14 @@ CREATE INDEX IF NOT EXISTS alphas_dataset ON alphas(dataset, engine);
 """
 
 
-def alpha_id(expression: str, settings: Settings, dataset_hash: str) -> str:
+def alpha_id(expression: str, settings: Settings, dataset_hash: str,
+             implementation: dict | None = None) -> str:
+    if implementation is None:
+        from qlib_yahoo.workflow_provenance import lab_implementation
+        implementation = lab_implementation()
     text = json.dumps({"expression": " ".join(expression.split()), "settings": asdict(settings.validate()),
-                       "dataset": dataset_hash, "engine": ENGINE_VERSION}, sort_keys=True)
+                       "dataset": dataset_hash, "engine": ENGINE_VERSION,
+                       "implementation": implementation["sha256"]}, sort_keys=True)
     return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
@@ -408,7 +413,8 @@ def run_batch(dataset: Path, expressions: list[str], settings: Settings, *, data
               worker_ceiling: int = 4, sec: dict | None = None,
               group_overlay: str | Path | None = None,
               progress: Callable[[str], None] | None = None,
-              diagnostics: dict | None = None) -> list[dict[str, Any]]:
+              diagnostics: dict | None = None,
+              parents: list[str] | None = None) -> list[dict[str, Any]]:
     """Simulate in input order; optional diagnostics are separate from alpha identity.
 
     The procedure timer includes preflight and resolution, but excludes the
@@ -419,14 +425,84 @@ def run_batch(dataset: Path, expressions: list[str], settings: Settings, *, data
     started = time.monotonic()
     measured = diagnostics if diagnostics is not None else {}
     measured.clear()
-    measured.update(scope="run_batch", cache_hit_count=0, new_computation_count=0, stages_seconds={})
+    measured.update(scope="run_batch", cache_hit_count=0, new_computation_count=0,
+                    stages_seconds={}, phase="preflight")
     completed = False
+    from qlib_yahoo.workflow_records import EvidenceStore
+    from qlib_yahoo.workflow_provenance import lab_implementation, request_value, frozen_lab_result
+
+    store = EvidenceStore(data_root)
+    if parents is None:
+        from qlib_yahoo.workflow_submission import parent_attempts
+        parents = parent_attempts()
+    submitted = store.begin("lab-batch", request_value({
+        "dataset": dataset, "expressions": expressions, "settings": settings,
+        "workers": workers, "worker_ceiling": worker_ceiling, "force": force,
+        "library": library, "sec": sec, "group_overlay": group_overlay,
+    }), parents=parents)
+    attempts = []
     try:
-        results = _run_batch(dataset, expressions, settings, data_root=data_root, workers=workers,
+        if not isinstance(expressions, list) or not expressions:
+            raise DatasetError("expressions must be a nonempty list")
+        implementation = lab_implementation()
+        for expression in expressions:
+            candidate_id = "lab-" + digest(request_value({
+                "expression": " ".join(expression.split()) if isinstance(expression, str) else expression,
+                "settings": settings, "dialect": "lab-fastexpr",
+            }))
+            attempts.append(store.begin("lab-evaluation", request_value({
+                "dataset": dataset, "expression": expression, "settings": settings,
+                "sec": sec, "group_overlay": group_overlay, "force": force,
+            }), parents=[submitted["id"]], candidate_id=candidate_id,
+                source={"implementation": implementation}))
+        valid = [index for index, expression in enumerate(expressions)
+                 if isinstance(expression, str) and expression.strip()]
+        computed = _run_batch(dataset, [expressions[index] for index in valid], settings,
+                             data_root=data_root, workers=workers,
                              library=library, force=force, worker_ceiling=worker_ceiling, sec=sec,
-                             group_overlay=group_overlay, progress=progress, diagnostics=measured)
+                             group_overlay=group_overlay, progress=progress, diagnostics=measured,
+                             implementation=implementation) if valid else []
+        if lab_implementation() != implementation:
+            raise DatasetError("Alpha Lab implementation changed during the submitted evaluation; rerun")
+        by_index = dict(zip(valid, computed))
+        results = []
+        seen = set()
+        for index, attempt in enumerate(attempts):
+            result = by_index.get(index, {
+                "expression": request_value(expressions[index]), "settings": request_value(settings),
+                "error": "expression must be a nonempty string", "preflight": True,
+                "id": "rejected-" + attempt["id"],
+            })
+            result["implementation"] = implementation
+            result["candidate_id"] = attempt["candidate_id"]
+            identifier = result["id"]
+            reused = bool(result.get("cached")) or identifier in seen
+            status = ("rejected" if result.get("preflight") else "failed") if "error" in result else (
+                "reused" if reused else "completed")
+            terminal = store.finish(attempt["id"], status, result=frozen_lab_result(result),
+                                    error=result.get("error"))
+            result.update(attempt_id=attempt["id"], result_digest=terminal["result_digest"],
+                          batch_attempt_id=submitted["id"])
+            results.append(result)
+            seen.add(identifier)
+        store.finish(submitted["id"], "completed", result={
+            "attempts": [result["attempt_id"] for result in results],
+            "results": [result["result_digest"] for result in results],
+            "errors": sum("error" in result for result in results),
+        })
+        measured["attempt_id"] = submitted["id"]
         completed = True
         return results
+    except BaseException as error:
+        status = ("cancelled" if isinstance(error, KeyboardInterrupt) else
+                  "rejected" if measured["phase"] == "preflight" else "failed")
+        details = {"type": type(error).__name__, "message": str(error)}
+        # Keep any already completed child immutable if persistence or a callback
+        # failed later. Pending ownership also remains recoverable after hard kill.
+        for attempt in [*attempts, submitted]:
+            if store.get(attempt["id"])["status"] == "pending":
+                store.finish(attempt["id"], status, error=details)
+        raise
     finally:
         measured["elapsed_seconds"] = max(0.0, time.monotonic() - started)
         if progress:
@@ -442,7 +518,7 @@ def _run_batch(dataset: Path, expressions: list[str], settings: Settings, *, dat
               sec: dict | None = None,
               group_overlay: str | Path | None = None,
               progress: Callable[[str], None] | None = None,
-              diagnostics: dict) -> list[dict[str, Any]]:
+              diagnostics: dict, implementation: dict) -> list[dict[str, Any]]:
     """Simulate every expression with ``settings``; return results in input order."""
     settings = settings.validate()
     expressions = [" ".join(e.split()) for e in expressions if e and e.strip()]
@@ -464,7 +540,8 @@ def _run_batch(dataset: Path, expressions: list[str], settings: Settings, *, dat
             invalid[index] = {"expression": expression, "settings": asdict(settings),
                               "error": "; ".join(problems), "preflight": True,
                               "id": alpha_id(expression, settings,
-                                             "preflight-unverified:" + str(Path(dataset).resolve()))}
+                                             "preflight-unverified:" + str(Path(dataset).resolve()),
+                                             implementation)}
     if invalid:
         # Preserve partial failures and input order. Only viable programs may
         # verify sources, acquire a verified cache identity or load panels.
@@ -472,7 +549,8 @@ def _run_batch(dataset: Path, expressions: list[str], settings: Settings, *, dat
         valid_results = (_run_batch(dataset, [expressions[index] for index in valid_indices], settings,
                                   data_root=data_root, workers=workers, library=library, force=force,
                                   worker_ceiling=worker_ceiling, sec=sec, group_overlay=group_overlay,
-                                  progress=progress, diagnostics=diagnostics) if valid_indices else [])
+                                  progress=progress, diagnostics=diagnostics,
+                                  implementation=implementation) if valid_indices else [])
         by_index = {**invalid, **dict(zip(valid_indices, valid_results))}
         return [by_index[index] for index in range(len(expressions))]
     from qlib_yahoo.sec_resolution import resolve_config
@@ -498,6 +576,7 @@ def _run_batch(dataset: Path, expressions: list[str], settings: Settings, *, dat
     registry = sec.get("registry") if sec and sec.get("mode") == "dictionary" else None
     say = progress or (lambda _message: None)
     started = time.monotonic()
+    diagnostics["phase"] = "preparation"
     identity = source_identity(Path(dataset))
     dataset_hash = identity["source_sha256"]
     identities = [identity for _ in expressions]
@@ -535,7 +614,7 @@ def _run_batch(dataset: Path, expressions: list[str], settings: Settings, *, dat
                 identities[index] = combined
     dataset_hashes = [item["source_sha256"] for item in identities]
     lib = Library(library or Path(data_root) / "alphalab" / "library.sqlite")
-    ids = [alpha_id(e, settings, source) for e, source in zip(expressions, dataset_hashes)]
+    ids = [alpha_id(e, settings, source, implementation) for e, source in zip(expressions, dataset_hashes)]
     results: dict[int, dict[str, Any]] = {}
     todo = []
     first_by_id = {}
@@ -611,6 +690,7 @@ def _run_batch(dataset: Path, expressions: list[str], settings: Settings, *, dat
         count = worker_count(workers, len(todo), workspace, worker_ceiling)
         del workspace
         say(f"Simulating {len(todo)} alpha(s) with {count} worker process(es) ...")
+        diagnostics["phase"] = "evaluation"
         diagnostics["new_computation_count"] += len(todo)
         if count == 1:
             # In-process batches own their maps locally, including on callback failure.
@@ -635,6 +715,7 @@ def _run_batch(dataset: Path, expressions: list[str], settings: Settings, *, dat
     library_pnl = lib.pnl_series(dataset_hash, settings, exclude=set(ids))
     for index, (identifier, result) in enumerate(zip(ids, ordered)):
         result["id"] = identifier
+        result["implementation"] = implementation
         if not result.get("cached"):
             # The shared workspace union must not change an individual alpha's identity.
             result["dataset"] = identities[index]
@@ -703,6 +784,9 @@ def save_batch(data_root: Path, results: list[dict[str, Any]], settings: Setting
     }
     path.write_text(json.dumps({"created_at_utc": datetime.now(timezone.utc).isoformat(), "dataset": str(dataset),
                                 "settings": asdict(settings), "ids": [r["id"] for r in results],
+                                "evidence": [{"attempt_id": r.get("attempt_id"),
+                                              "result_digest": r.get("result_digest"),
+                                              "batch_attempt_id": r.get("batch_attempt_id")} for r in results],
                                 "diagnostics": {"version": 1, "alphalab": diagnostic_record},
                                 "errors": {r["id"]: r["error"] for r in results if "error" in r}}, indent=1),
                     encoding="utf-8")

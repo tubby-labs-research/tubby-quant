@@ -24,9 +24,10 @@ F32 = np.float32
 
 
 def _clean(values: Any) -> np.ndarray:
-    out = np.asarray(values, dtype=np.float64)
-    out = np.where(np.isfinite(out), out, np.nan)
-    return out.astype(F32)
+    out = np.asarray(values, dtype=np.float64).astype(F32)
+    # Check finiteness after the float32 cast: float64 values beyond the float32
+    # range (exp(100), volume^7) would otherwise survive as inf.
+    return np.where(np.isfinite(out), out, np.float32(np.nan))
 
 
 def _window(value: Any, name: str, low: int = 1, high: int = 1000) -> int:
@@ -128,7 +129,8 @@ def ts_ir(x, d):
 
 def ts_product(x, d):
     d = _window(d, "ts_product")
-    logs = _frame(np.log(np.abs(np.asarray(x, dtype=np.float64)))).rolling(d, min_periods=d).sum().to_numpy()
+    with np.errstate(divide="ignore"):
+        logs = _frame(np.log(np.abs(np.asarray(x, dtype=np.float64)))).rolling(d, min_periods=d).sum().to_numpy()
     negatives = _frame((np.asarray(x) < 0).astype(np.float64)).rolling(d, min_periods=d).sum().to_numpy()
     zeros = _frame((np.asarray(x) == 0).astype(np.float64)).rolling(d, min_periods=d).sum().to_numpy()
     with np.errstate(over="ignore", invalid="ignore"):
@@ -136,16 +138,24 @@ def ts_product(x, d):
     return _clean(np.where(zeros > 0, 0.0, product))
 
 
+_ARG_CHUNK_CELLS = 8_000_000  # float64 cells per temporary window block (64 MB)
+
+
 def _arg(x, d, name, pick):
     d = _window(d, name, 1)
     values = np.asarray(x, dtype=np.float64)
     out = np.full(values.shape, np.nan)
     if len(values) >= d:
-        windows = np.lib.stride_tricks.sliding_window_view(values, d, axis=0)  # (T-d+1, N, d)
-        complete = ~np.isnan(windows).any(axis=2)
-        filled = np.where(np.isnan(windows), -np.inf if pick == "max" else np.inf, windows)
-        position = (np.argmax if pick == "max" else np.argmin)(filled[:, :, ::-1], axis=2)
-        out[d - 1:] = np.where(complete, position, np.nan)  # days since the extreme; 0 = today
+        windows = np.lib.stride_tricks.sliding_window_view(values, d, axis=0)  # (T-d+1, N, d) view
+        fill = -np.inf if pick == "max" else np.inf
+        choose = np.argmax if pick == "max" else np.argmin
+        # One (rows, N, d) temporary at a time: the whole panel is gigabytes for TOP3000 and d=250.
+        step = max(1, _ARG_CHUNK_CELLS // max(1, values.shape[1] * d))
+        for start in range(0, len(windows), step):
+            block = windows[start:start + step]
+            missing = np.isnan(block)
+            position = choose(np.where(missing, fill, block)[:, :, ::-1], axis=2)  # days since; 0 = today
+            out[d - 1 + start:d - 1 + start + len(block)] = np.where(missing.any(axis=2), np.nan, position)
     return _clean(out)
 
 
@@ -317,8 +327,10 @@ def scale(x, members, scale=1.0, longscale=None, shortscale=None):
             pos, neg = np.where(values > 0, values, 0.0), np.where(values < 0, values, 0.0)
             pos_sum = np.nansum(pos, axis=1, keepdims=True)
             neg_sum = -np.nansum(neg, axis=1, keepdims=True)
-            out = pos / pos_sum * float(longscale or 0) + neg / neg_sum * float(shortscale or 0)
-            out = np.where(np.isnan(values), np.nan, out)
+            # A side with no positions scales to zero instead of turning the day into 0/0 = NaN.
+            longs = np.where(pos_sum > 0, pos / np.where(pos_sum > 0, pos_sum, 1.0), 0.0) * float(longscale or 0)
+            shorts = np.where(neg_sum > 0, neg / np.where(neg_sum > 0, neg_sum, 1.0), 0.0) * float(shortscale or 0)
+            out = np.where(np.isnan(values), np.nan, longs + shorts)
         else:
             out = values / np.nansum(np.abs(values), axis=1, keepdims=True) * float(scale)
     return _clean(out)
@@ -346,12 +358,49 @@ def vector_neut(x, y, members):
 
 
 def _group_codes(group, shape) -> tuple[np.ndarray, int]:
-    """Integer group codes broadcast to ``shape``; -1 where the group is unknown."""
+    """Compact integer group codes 0..k-1 broadcast to ``shape``; -1 where the group is unknown.
+
+    Labels are compacted so the per-(day, group) tables scale with the number of
+    distinct groups, not with the largest label (an arbitrary series used as a
+    group would otherwise allocate gigabytes).
+    """
     codes = np.asarray(group, dtype=np.float64)
     codes = np.broadcast_to(codes, shape) if codes.ndim == 1 else codes
     known = np.isfinite(codes) & (codes >= 0)
-    integer = np.where(known, codes, -1).astype(np.int64)
-    return integer, int(integer.max()) + 1 if known.any() else 0
+    integer = np.full(codes.shape, -1, dtype=np.int64)
+    if not known.any():
+        return integer, 0
+    labels, inverse = np.unique(np.floor(codes[known]), return_inverse=True)
+    integer[known] = inverse
+    return integer, len(labels)
+
+
+def _group_rank(values: np.ndarray, codes: np.ndarray, groups: int) -> np.ndarray:
+    """Rank within each (day, group) cell to [0, 1] with averaged ties; a singleton ranks 0.5."""
+    out = np.full_like(values, np.nan)
+    valid = ~np.isnan(values) & (codes >= 0)
+    if not valid.any():
+        return _clean(out)
+    rows = np.broadcast_to(np.arange(values.shape[0])[:, None], values.shape)
+    cell = (rows * max(groups, 1) + codes)[valid]
+    data = values[valid]
+    order = np.lexsort((data, cell))
+    cell_sorted, data_sorted = cell[order], data[order]
+    new_cell = np.r_[True, cell_sorted[1:] != cell_sorted[:-1]]
+    block_start = np.flatnonzero(new_cell)
+    block = np.cumsum(new_cell) - 1
+    count = np.diff(np.r_[block_start, len(cell_sorted)])[block]
+    new_tie = new_cell | np.r_[True, data_sorted[1:] != data_sorted[:-1]]
+    tie_start = np.flatnonzero(new_tie)
+    tie = np.cumsum(new_tie) - 1
+    tie_length = np.diff(np.r_[tie_start, len(cell_sorted)])
+    average = (tie_start + (tie_length - 1) / 2.0)[tie] - block_start[block]  # mean 0-based position in its cell
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ranks = np.where(count > 1, average / (count - 1), 0.5)
+    unsorted = np.empty(len(data))
+    unsorted[order] = ranks
+    out[valid] = unsorted
+    return _clean(out)
 
 
 def _group_apply(x, group, members, kind):
@@ -359,12 +408,7 @@ def _group_apply(x, group, members, kind):
     values = np.where(members, np.asarray(x, dtype=np.float64), np.nan)
     codes, groups = _group_codes(group, values.shape)
     if kind == "rank":
-        out = np.full_like(values, np.nan)
-        for code in range(groups):
-            in_group = (codes == code) & ~np.isnan(values)
-            if in_group.any():
-                out = np.where(in_group, rank(values, in_group).astype(np.float64), out)
-        return _clean(out)
+        return _group_rank(values, codes, groups)
     valid = ~np.isnan(values) & (codes >= 0)
     rows = np.broadcast_to(np.arange(values.shape[0])[:, None], values.shape)
     cell = np.where(valid, rows * max(groups, 1) + codes, 0)
@@ -382,8 +426,9 @@ def _group_apply(x, group, members, kind):
         if kind == "mean":
             return _clean(mean)
         if kind == "zscore":
-            squares = np.bincount(index, weights=data * data, minlength=size)
-            std = np.sqrt(np.maximum(squares / counts - means * means, 0.0))
+            deviation = data - means[index]  # two-pass: E[x^2] - E[x]^2 cancels badly for offset series
+            squares = np.bincount(index, weights=deviation * deviation, minlength=size)
+            std = np.sqrt(squares / counts)
             return _clean((values - mean) / np.where(valid, std[cell], np.nan))
     raise ExpressionError(f"unknown group operation {kind}")
 
@@ -479,7 +524,10 @@ def signed_power(x, e):
 
 
 def clamp(x, lower=-math.inf, upper=math.inf):
-    return _clean(np.clip(np.asarray(x, dtype=np.float64), float(lower), float(upper)))
+    lower, upper = float(lower), float(upper)
+    if lower > upper:
+        raise ExpressionError("clamp: lower must not exceed upper")
+    return _clean(np.clip(np.asarray(x, dtype=np.float64), lower, upper))
 
 
 def elementwise_min(*values):

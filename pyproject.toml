@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tubby-quant"
+dynamic = ["version"]
+description = "Local workbench for daily equity alpha research: BRAIN-style Alpha Lab screening, Qlib-backed validation and a source-grounded research controller."
+readme = "README.md"
+requires-python = ">=3.12"
+# Apache 2.0 applies to the packaged framework code (qlib_yahoo, autoresearch) per the
+# 2026-10-14 release decision in docs/PUBLIC_RELEASE_PREPARATION.md. It does not relicense
+# other content of the private repository, and third-party notices are retained.
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE", "licenses/*.txt"]
+authors = [{ name = "Tubby Labs" }]
+keywords = [
+  "quant", "alpha-research", "backtesting", "worldquant-brain", "fastexpr", "qlib",
+  "equities", "factor-research",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Office/Business :: Financial :: Investment",
+  "Topic :: Scientific/Engineering",
+]
+# Core: Alpha Lab screening, Research campaigns, the loopback console and the data
+# adapters. The verified Qlib validation stack stays behind the platform setup
+# scripts and the pinned extras below; see docs/INSTALL.md.
+dependencies = [
+  "numpy>=1.26,<3",
+  "pandas>=2.2,<3",
+]
+
+[project.optional-dependencies]
+# Mirrors requirements-qlib-yahoo.txt exactly (tests/test_packaging.py checks the pins).
+qlib = [
+  "numpy==1.26.4",
+  "pandas==2.2.3",
+  "scipy==1.14.1",
+  "mlflow==3.16.1",
+  "pyqlib==0.9.7",
+  "yahooquery==2.4.1",
+  "plotly==5.24.1",
+  "statsmodels==0.14.4",
+]
+# Mirrors requirements-qlib-table.txt: consolidated Stooq/Sharadar table imports.
+table = ["pyarrow==25.0.1"]
+# Mirrors the pywebview pin in requirements-qlib-macos.txt / requirements-qlib-windows.txt.
+desktop = ["pywebview==6.2.1"]
+# Direct Anthropic model adapter for Research campaigns (autoresearch/models.py).
+research = ["anthropic>=0.40.0"]
+
+[project.scripts]
+tubby-quant = "qlib_yahoo.webapp.__main__:main"
+tubby-qlib = "qlib_yahoo.__main__:main"
+tubby-research = "autoresearch.__main__:main"
+tubby-alpha-mcp = "qlib_yahoo.alphalab.mcp:main"
+
+[project.urls]
+Homepage = "https://github.com/tubby-labs-research/tubby-quant"
+Repository = "https://github.com/tubby-labs-research/tubby-quant"
+Documentation = "https://github.com/tubby-labs-research/tubby-quant/blob/main/docs/README.md"
+Issues = "https://github.com/tubby-labs-research/tubby-quant/issues"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.dynamic]
+version = { attr = "qlib_yahoo.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["qlib_yahoo*", "autoresearch*"]
+
+[tool.setuptools.package-data]
+qlib_yahoo = [
+  "webapp/static/*",
+  "examples/*.txt",
+  "sec_registry_definitions.json",
+  "*.pyx",
+]

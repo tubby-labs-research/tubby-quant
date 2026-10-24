@@ -10,6 +10,8 @@ from unittest.mock import Mock, patch
 
 from qlib_yahoo import __main__ as cli
 from qlib_yahoo.alphalab.cli import load_sec_config
+from qlib_yahoo.alphalab.settings import Settings
+from qlib_yahoo.workflow_records import EvidenceStore
 
 
 class SecCliTests(unittest.TestCase):
@@ -25,7 +27,7 @@ class SecCliTests(unittest.TestCase):
 
     def invoke(self, arguments):
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            return cli.main(arguments)
+            return cli.main(["--data-root", str(self.root), *arguments])
 
     def test_parser_optional_paths(self):
         for args in (["backtest"], ["alpha", "run", "close"], ["alpha", "batch", "alphas.txt"]):
@@ -75,7 +77,8 @@ class SecCliTests(unittest.TestCase):
     def test_bad_config_reports_error_before_native_run(self):
         self.config.write_text("[]", encoding="utf-8")
         with patch.object(cli, "run_backtest") as run, contextlib.redirect_stderr(io.StringIO()) as error:
-            self.assertEqual(cli.main(["backtest", "--alpha", "$close", "--sec-config", str(self.config)]), 1)
+            self.assertEqual(cli.main(["--data-root", str(self.root), "backtest", "--alpha", "$close",
+                                       "--sec-config", str(self.config)]), 1)
             self.assertIn("Invalid SEC config", error.getvalue())
             run.assert_not_called()
 
@@ -85,38 +88,78 @@ class SecCliTests(unittest.TestCase):
         batch.read_expressions = Mock(return_value=["sec_assets"])
         batch.batch_correlations = Mock(return_value=([], []))
         batch.run_batch = Mock(return_value=[{"id": "fixture", "expression": "sec_assets", "summary": {}}])
+        batch.save_batch = Mock(return_value=self.root / "batch.json")
         for command in (["run", "sec_assets"], ["run", "sec_assets", "--save"], ["batch", "alphas.txt"]):
             with self.subTest(command=command), patch.dict("sys.modules", {batch.__name__: batch}), \
                     patch("qlib_yahoo.dataset.resolve_dataset", return_value=self.root), \
-                    patch("qlib_yahoo.alphalab.cli.print_result"):
+                    patch("qlib_yahoo.alphalab.cli.print_result") as print_result:
                 batch.run_batch.reset_mock()
+                batch.save_batch.reset_mock()
+                batch.read_expressions.reset_mock()
                 self.assertEqual(self.invoke(["alpha", *command, "--sec-config", str(self.config)]), 0)
+                batch.run_batch.assert_called_once()
+                self.assertEqual(batch.run_batch.call_args.args[0], self.root)
+                self.assertEqual(batch.run_batch.call_args.args[2], Settings())
+                self.assertEqual(batch.run_batch.call_args.kwargs["data_root"], self.root)
                 self.assertEqual(batch.run_batch.call_args.kwargs["sec"], load_sec_config(self.config))
                 if command[0] == "run":
                     self.assertEqual(batch.run_batch.call_args.args[1], ["sec_assets"])
                     self.assertEqual(batch.run_batch.call_args.kwargs["workers"], 1)
+                    print_result.assert_called_once_with(batch.run_batch.return_value[0])
+                    batch.read_expressions.assert_not_called()
+                    batch.save_batch.assert_not_called()
+                else:
+                    batch.read_expressions.assert_called_once_with(Path("alphas.txt"))
+                    self.assertEqual(batch.run_batch.call_args.args[1], batch.read_expressions.return_value)
+                    self.assertEqual(batch.run_batch.call_args.kwargs["workers"], 4)
+                    self.assertFalse(batch.run_batch.call_args.kwargs["force"])
+                    self.assertTrue(callable(batch.run_batch.call_args.kwargs["progress"]))
+                    batch.save_batch.assert_called_once_with(
+                        self.root, batch.run_batch.return_value, batch.run_batch.call_args.args[2], str(self.root))
+                    print_result.assert_not_called()
         for command in (["run", "close", "--save"], ["batch", "alphas.txt"]):
             with self.subTest(price_only=command), patch.dict("sys.modules", {batch.__name__: batch}), \
                     patch("qlib_yahoo.dataset.resolve_dataset", return_value=self.root), \
                     patch("qlib_yahoo.alphalab.cli.print_result"):
                 batch.run_batch.reset_mock()
+                batch.save_batch.reset_mock()
+                batch.read_expressions.return_value = ["close"]
+                batch.run_batch.return_value = [{"id": "fixture", "expression": "close", "summary": {}}]
                 self.assertEqual(self.invoke(["alpha", *command]), 0)
+                batch.run_batch.assert_called_once()
+                self.assertEqual(batch.run_batch.call_args.args, (self.root, ["close"], Settings()))
+                self.assertEqual(batch.run_batch.call_args.kwargs["data_root"], self.root)
                 self.assertNotIn("sec", batch.run_batch.call_args.kwargs)
+                self.assertNotIn("group_overlay", batch.run_batch.call_args.kwargs)
+                if command[0] == "batch":
+                    batch.save_batch.assert_called_once_with(
+                        self.root, batch.run_batch.return_value, batch.run_batch.call_args.args[2], str(self.root))
+                else:
+                    batch.save_batch.assert_not_called()
 
-    def test_price_only_single_keeps_workspace_path(self):
+    def test_price_only_single_uses_shared_batch_path(self):
         batch = types.ModuleType("qlib_yahoo.alphalab.batch")
         for name in ("Library", "batch_correlations", "read_expressions", "run_batch"):
             setattr(batch, name, Mock())
-        simulate = types.ModuleType("qlib_yahoo.alphalab.simulate")
-        simulate.Workspace = Mock()
-        simulate.simulate = Mock(return_value={})
-        simulate.json_safe = lambda value: value
-        with patch.dict("sys.modules", {batch.__name__: batch, simulate.__name__: simulate}), \
+        result = {"id": "fixture", "expression": "close", "summary": {}}
+        batch.run_batch.return_value = [result]
+        output = self.root / "result.json"
+        with patch.dict("sys.modules", {batch.__name__: batch}), \
                 patch("qlib_yahoo.dataset.resolve_dataset", return_value=self.root), \
-                patch("qlib_yahoo.alphalab.cli.print_result"):
-            self.assertEqual(self.invoke(["alpha", "run", "close"]), 0)
-            batch.run_batch.assert_not_called()
-            simulate.Workspace.assert_called_once_with(self.root)
+                patch("qlib_yahoo.alphalab.cli.print_result") as print_result:
+            self.assertEqual(self.invoke(["alpha", "run", "close", "--json", str(output)]), 0)
+            batch.run_batch.assert_called_once_with(
+                self.root, ["close"], Settings(), data_root=self.root, workers=1)
+            print_result.assert_called_once_with(result)
+            self.assertEqual(json.loads(output.read_text(encoding="utf-8")), result)
+            batch.Library.assert_not_called()
+            batch.read_expressions.assert_not_called()
+        store = EvidenceStore(self.root)
+        attempts = store.list_attempts()
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(attempts[0]["kind"], "cli-lab")
+        self.assertEqual(attempts[0]["status"], "completed")
+        self.assertEqual(store.get(attempts[0]["id"])["request"]["data_root"], str(self.root))
 
 
 if __name__ == "__main__":

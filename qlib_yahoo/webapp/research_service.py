@@ -19,7 +19,7 @@ from autoresearch.config import validate_config
 from autoresearch.controller import atomic_json
 from autoresearch.backend import _date
 from autoresearch.discovery import discover
-from autoresearch.models import AnthropicModel, validate_candidates
+from autoresearch.models import AnthropicModel, OpenAICompatibleModel, validate_candidates
 from autoresearch.models import APIAgentModel, ModelError
 from autoresearch.agents import load_agents, credential_ready
 from autoresearch.policy import DEFAULTS
@@ -32,7 +32,8 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 _SAFE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z")
-_COLLECTIONS = ("campaigns", "hypotheses", "experiments", "reviews", "sources", "events")
+_COLLECTIONS = ("campaigns", "hypotheses", "experiments", "reviews", "sources", "events", "finals")
+OPENAI_BASE_URL_ENV = "QUANT_OPENAI_BASE_URL"  # administrator-owned alternative endpoint for the openai provider
 _HIDDEN = {"code", "code_sha256", "backend_identity", "fixture_inputs", "fixture_path", "fixture_sources", "hypotheses_sha256", "refinements_sha256", "api_key_env", "endpoint", "research_root", "runtime_root", "artifacts", "api_key", "password", "secret", "token", "authorization"}
 
 
@@ -77,7 +78,7 @@ class ResearchService:
 
     def _clean(self, value, depth=0, *, keep_inputs=False, _redactions=None):
         if _redactions is None:
-            names = {"ANTHROPIC_API_KEY"}
+            names = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY"}
             try:
                 names.update(row["config"].get("api_key_env") for row in load_agents(self.data_root).values())
             except ModelError:
@@ -155,8 +156,8 @@ class ResearchService:
         model = cfg["model"]
         reviewed = model.get("provider") == "reviewed"
         model_keys = {"provider", "model", "research_focus"} | ({"hypotheses", "refinements"} if reviewed else {"agent_id"} if model.get("provider") == "agent" else set())
-        if model.keys() - model_keys or model.get("provider") not in {"anthropic", "reviewed", "agent"}:
-            raise ValueError("Select a configured agent, Anthropic or reviewed ideas; endpoints and credentials are server-side")
+        if model.keys() - model_keys or model.get("provider") not in {"anthropic", "openai", "reviewed", "agent"}:
+            raise ValueError("Select a configured agent, Anthropic, an OpenAI-compatible model or reviewed ideas; endpoints and credentials are server-side")
         if model.get("provider") == "agent":
             self._id(model.get("agent_id"))
         focus = model.get("research_focus", "")
@@ -170,6 +171,8 @@ class ResearchService:
         else:
             if model["provider"] == "anthropic":
                 AnthropicModel(model)  # validation only, no client or network
+            elif model["provider"] == "openai":
+                OpenAICompatibleModel(self._openai_config(model))  # validation only, no client or network
             if discovery.keys() - {"arxiv_queries", "max_results"}:
                 raise ValueError("Unknown discovery settings")
             queries = discovery.get("arxiv_queries", [])
@@ -280,7 +283,22 @@ class ResearchService:
         with self._lock:
             return self._process is not None and self._process.poll() is None
 
+    @staticmethod
+    def _openai_config(model):
+        """The browser never supplies endpoints: an alternative base URL is an administrator setting."""
+        base_url = os.environ.get(OPENAI_BASE_URL_ENV, "").strip()
+        return {**copy.deepcopy(model), **({"base_url": base_url} if base_url else {})}
+
+    @staticmethod
+    def _openai_ready():
+        if os.environ.get("OPENAI_API_KEY", "").strip():
+            return True
+        base_url = os.environ.get(OPENAI_BASE_URL_ENV, "").strip()
+        return bool(base_url) and urlparse(base_url).hostname in {"127.0.0.1", "localhost", "::1"}
+
     def _resolved_model(self, model):
+        if model["provider"] == "openai":
+            return self._openai_config(model)
         if model["provider"] != "agent":
             return copy.deepcopy(model)
         row = load_agents(self.data_root).get(model["agent_id"])
@@ -298,7 +316,13 @@ class ResearchService:
                 {"id": "anthropic", "name": "Anthropic · direct model", "provider": "anthropic",
                  "provider_name": "Anthropic", "model": "", "ready": bool(os.environ.get("ANTHROPIC_API_KEY", "").strip()),
                  "state": "configured" if os.environ.get("ANTHROPIC_API_KEY", "").strip() else "missing_credential",
-                 "message": "Credential available; connection checked when research starts." if os.environ.get("ANTHROPIC_API_KEY", "").strip() else "Ask the server administrator to provide the Anthropic credential."}]
+                 "message": "Credential available; connection checked when research starts." if os.environ.get("ANTHROPIC_API_KEY", "").strip() else "Ask the server administrator to provide the Anthropic credential."},
+                {"id": "openai", "name": "OpenAI-compatible · direct model", "provider": "openai",
+                 "provider_name": "OpenAI-compatible", "model": "", "ready": self._openai_ready(),
+                 "state": "configured" if self._openai_ready() else "missing_credential",
+                 "message": ("Credential or loopback endpoint available; connection checked when research starts."
+                             if self._openai_ready() else
+                             "Ask the server administrator to provide OPENAI_API_KEY, or a loopback " + OPENAI_BASE_URL_ENV + ".")}]
         issues = []
         try:
             for agent_id, row in load_agents(self.data_root).items():
@@ -345,6 +369,8 @@ class ResearchService:
             issues.append("Dataset is unavailable or has no manifest")
         if cfg["model"]["provider"] == "anthropic" and not os.environ.get("ANTHROPIC_API_KEY", "").strip():
             issues.append("ANTHROPIC_API_KEY is not available to this app")
+        if cfg["model"]["provider"] == "openai" and not self._openai_ready():
+            issues.append("OPENAI_API_KEY (or a loopback " + OPENAI_BASE_URL_ENV + ") is not available to this app")
         if cfg["model"]["provider"] == "agent":
             try:
                 model = self._resolved_model(cfg["model"])
@@ -407,18 +433,20 @@ class ResearchService:
                 raise ValueError("Demo configuration must use offline fixtures")
             return self._spawn(path, "demo", True, False)
 
-    def _spawn(self, path, config_id, demo, continuous, *, reviewed=False):
+    def _spawn(self, path, config_id, demo, continuous, *, reviewed=False, command=None, phase=None):
         if self.busy() or self._stopping or self._closed:
             raise ValueError("A research worker is already running or the app is closing")
-        args = [sys.executable, "-m", "autoresearch", "run", str(path), "--continuous" if continuous else "--once"]
-        if not demo and not reviewed:
-            args.append("--allow-model")
+        if command is None:
+            command = ["run", str(path), "--continuous" if continuous else "--once"]
+            if not demo and not reviewed:
+                command.append("--allow-model")
+        args = [sys.executable, "-m", "autoresearch", *command]
         process = subprocess.Popen(args, cwd=self.source_root, stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT, text=True, bufsize=1)
         self._stop_requested = False
         self._process = process
         self._worker = {**self._idle(), "running": True, "status": "starting", "config_id": config_id,
-                        "demo": demo, "continuous": continuous, "reviewed": reviewed}
+                        "demo": demo, "continuous": continuous, "reviewed": reviewed, "phase": phase}
         threading.Thread(target=self._drain, args=(process,), daemon=True).start()
         return copy.deepcopy(self._worker)
 
@@ -475,6 +503,72 @@ class ResearchService:
         with self._lock:
             self._closed = True
         self.stop(_grace=5)
+
+    def _campaign_runtime(self, campaign_id):
+        """(campaign.json, config_id, demo) for a campaign whose runtime exists on this machine."""
+        for root, demo in self._roots():
+            if not any(row["id"] == campaign_id for row in self._records(root, "campaigns")):
+                continue
+            _state, config_id = self._checkpoint(campaign_id, demo)
+            if not config_id:
+                break
+            folder = self.demo_root if demo else self.runtime_root / self._id(config_id)
+            self._inside(self.data_root, folder)
+            path = self._inside(folder, folder / "campaign.json")
+            if path.is_file():
+                return path, config_id, demo
+            break
+        raise ValueError("This campaign's runtime is unavailable on this machine; finalize it where it ran")
+
+    def finalize(self, data):
+        """Score promoted (or named) ideas once on the reserved holdout, as a worker run."""
+        with self._lock:
+            if not isinstance(data, dict) or data.keys() - {"id", "hypothesis_ids", "allow_reuse"}:
+                raise ValueError("Finalize requires a campaign id, optional hypothesis_ids and allow_reuse")
+            campaign_id = self._id(data.get("id"))
+            ids = data.get("hypothesis_ids")
+            if ids is not None:
+                if not isinstance(ids, list) or not 1 <= len(ids) <= 50:
+                    raise ValueError("hypothesis_ids must list 1 to 50 hypothesis ids")
+                ids = [self._id(value) for value in ids]
+            if type(data.get("allow_reuse", False)) is not bool:
+                raise ValueError("allow_reuse must be true or false")
+            if self.busy() or self._stopping or self._closed:
+                raise ValueError("A research worker is already running or the app is closing")
+            path, config_id, demo = self._campaign_runtime(campaign_id)
+            command = ["finalize", str(path)]
+            for value in ids or []:
+                command += ["--hypothesis", value]
+            if data.get("allow_reuse"):
+                command.append("--allow-reuse")
+            worker = self._spawn(path, config_id, demo, False, command=command, phase="finalizing")
+            worker["campaign_id"] = campaign_id
+            self._worker["campaign_id"] = campaign_id
+            return worker
+
+    def export_batch(self, data):
+        """Promoted, confirmed or all successful expressions as Alpha Lab batch text; also saved under the data root."""
+        if not isinstance(data, dict) or data.keys() - {"id", "decision"}:
+            raise ValueError("Export requires a campaign id and an optional decision")
+        campaign_id = self._id(data.get("id"))
+        decision = data.get("decision", "promote")
+        if decision not in {"promote", "confirmed", "all"}:
+            raise ValueError("decision must be promote, confirmed or all")
+        from autoresearch.handoff import batch_text, campaign_report
+
+        for root, demo in self._roots():
+            if not any(row["id"] == campaign_id for row in self._records(root, "campaigns")):
+                continue
+            reader = _RecordReader(self, root)
+            text, count = batch_text(campaign_report(reader, campaign_id), decision)
+            exports = self._inside(self.data_root, self.root / "exports")
+            exports.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            path = self._inside(exports, exports / f"{campaign_id}-{decision}-{stamp}.txt")
+            path.write_text(text, encoding="utf-8")
+            return self._clean({"campaign_id": campaign_id, "decision": decision, "count": count, "text": text,
+                                "path": str(path), "demo": demo})
+        raise ValueError("Research campaign not found")
 
     def _records(self, root, collection):
         if not root.exists():
@@ -536,7 +630,8 @@ class ResearchService:
                                            "hypothesis": hypothesis["id"], "policy": cfg.get("policy", {})}))
         counts = {"hypotheses": len(hypotheses), "experiments": len(experiments),
                   "reviews": sum(r["id"] in current_review_ids for r in records["reviews"]),
-                  "sources": sum(r["id"] in source_ids for r in records["sources"])}
+                  "sources": sum(r["id"] in source_ids for r in records["sources"]),
+                  "finals": sum(r.get("campaign_id") == row["id"] for r in records.get("finals", []))}
         status = state.get("status", "recorded")
         owns_worker = self._worker.get("campaign_id") == row["id"]
         if owns_worker and self._worker.get("status") == "error":
@@ -621,10 +716,21 @@ class ResearchService:
                 enriched.append({**row, "experiments": linked, "result": linked[-1].get("result") if linked else None,
                                  "latest_review": latest_review,
                                  "sources": [r for r in sources if r["id"] in row.get("source_ids", [])], "lineage": lineage})
+            finals = [r for r in records.get("finals", []) if r.get("campaign_id") == campaign_id]
+            latest_final = {}
+            for final in finals:  # records are sorted by creation time; the last one per idea wins
+                latest_final[final.get("hypothesis_id")] = final
+            for row in enriched:
+                row["final"] = latest_final.get(row["id"])
             campaign = {**manifest, **self._summary(manifest, root, demo, records)}
+            backend = manifest.get("config", {}).get("backend", {})
             return self._clean({"campaign": campaign, "hypotheses": enriched, "experiments": experiments,
                                 "reviews": [r for r in reviews if r["id"] in current_review_ids], "sources": sources,
-                                "events": events[-300:],
+                                "events": events[-300:], "finals": finals,
+                                "holdout": {"reserved": bool(backend.get("holdout_start")),
+                                            "start": backend.get("holdout_start"),
+                                            "accessed": bool(state.get("holdout_accessed")),
+                                            "runtime_available": bool(self._checkpoint(campaign_id, demo)[1])},
                                 "checkpoint": state})
         raise ValueError("Research campaign not found")
 
@@ -678,3 +784,14 @@ class ResearchService:
             except (ValueError, OSError, KeyError, TypeError, OverflowError):
                 return {**public, "status": "invalid", "message": "The retained series failed integrity or date checks; it cannot be charted."}
         raise ValueError("Research campaign not found")
+
+
+class _RecordReader:
+    """Read-only ``list(collection)`` over a campaign root, so reports never open a writable store."""
+
+    def __init__(self, service, root):
+        self._service, self._root = service, root
+
+    def list(self, collection):
+        return self._service._records(self._root, collection)
+

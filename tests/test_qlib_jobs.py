@@ -26,7 +26,7 @@ class JobUnitTests(unittest.TestCase):
                     "qtrs": 0, "segments": "", "coreg": ""} for i in range(1000)}
         for kind in ("backtest", "backtest-batch", "alpha-batch"):
             with self.subTest(kind=kind):
-                request = {"kind": kind, "alpha": "$sec_0 / $close /* private */",
+                request = {"kind": kind, "alpha": "$sec_0 / $close /* confidential-marker-9c1e */",
                            "sec": {"catalog": "D:/Qlib/sec/catalogs/fixture", "bindings": bindings}}
                 job = Job(request)
                 paths = []
@@ -51,7 +51,7 @@ class JobUnitTests(unittest.TestCase):
                     self.assertEqual(job.run(lines.append), Path("receipt"))
                 self.assertEqual(job.process.args[3], "--request-file")
                 self.assertLess(len(subprocess.list2cmdline(job.process.args)), 32767)
-                self.assertNotIn("private", " ".join(job.process.args))
+                self.assertNotIn("confidential-marker-9c1e", " ".join(job.process.args))
                 self.assertFalse(job.process.assertions.get("shell", False))
                 self.assertEqual(job.process.received["sec"], request["sec"])
                 self.assertEqual(job.process.received["alpha"], request["alpha"])
@@ -61,7 +61,7 @@ class JobUnitTests(unittest.TestCase):
                 timing_prefix = ("Full worker elapsed (child_main entry through request parsing, execution, "
                                  "save/report; excludes process startup/parent UI): ")
                 self.assertTrue(lines[0].startswith(timing_prefix), lines[0])
-                self.assertNotIn("private", lines[0])
+                self.assertNotIn("confidential-marker-9c1e", lines[0])
                 self.assertNotIn(request["alpha"], lines[0])
                 diagnostics = json.loads(lines[0][len(timing_prefix):])["diagnostics"]
                 self.assertEqual(set(diagnostics), {"version", "worker"})

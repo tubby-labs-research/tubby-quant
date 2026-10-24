@@ -62,7 +62,8 @@ def add_parser(commands: Any) -> None:
     run.add_argument("expression", help="FASTEXPR alpha, e.g. \"-rank(ts_delta(close, 5))\".")
     settings_arguments(run)
     run.add_argument("--json", type=Path, help="Write the full result (with daily PnL) as JSON.")
-    run.add_argument("--save", action="store_true", help="Also add it to the alpha library.")
+    # Old scripts remain accepted; every submitted run now retains evidence.
+    run.add_argument("--save", action="store_true", help=argparse.SUPPRESS)
 
     batch = sub.add_parser("batch", help="Simulate every alpha in a file in parallel; save to the library.")
     batch.add_argument("file", type=Path, help="One alpha per line; lines starting with # are ignored.")
@@ -106,9 +107,33 @@ def print_result(result: dict[str, Any]) -> None:
     for name, stats in (result.get("periods") or {}).items():
         print(f"  {name}: Sharpe {_fmt(stats.get('sharpe'), '.2f')} over {stats.get('days')} sessions")
     print("  checks: " + ", ".join(f"{c['name']} {c['result']}" for c in result["checks"]))
+    if result.get("attempt_id"):
+        print(f"  saved attempt: {result['attempt_id']}  result: {result['result_digest']}")
 
 
 def main(args: argparse.Namespace) -> None:
+    if args.alpha_command in ("operators", "library"):
+        return _main(args)
+    from qlib_yahoo.workflow_records import EvidenceStore
+    from qlib_yahoo.workflow_provenance import request_value
+    from qlib_yahoo.workflow_submission import submission_context
+
+    store = EvidenceStore(args.data_root)
+    attempt = store.begin("cli-lab", request_value(vars(args)))
+    try:
+        with submission_context(store, attempt):
+            result = _main(args)
+        store.finish(attempt["id"], "completed", result={"command": args.alpha_command})
+        return result
+    except BaseException as error:
+        status = ("cancelled" if isinstance(error, KeyboardInterrupt) else
+                  "rejected" if isinstance(error, (ValueError, TypeError)) else "failed")
+        store.finish(attempt["id"], status,
+                     error={"type": type(error).__name__, "message": str(error)})
+        raise
+
+
+def _main(args: argparse.Namespace) -> None:
     from qlib_yahoo.dataset import resolve_dataset
 
     if args.alpha_command == "operators":
@@ -133,15 +158,10 @@ def main(args: argparse.Namespace) -> None:
         sec_options["group_overlay"] = args.group_overlay
     dataset = resolve_dataset(args.data_root, args.dataset)
     if args.alpha_command == "run":
-        if args.save or sec_options:
-            result = run_batch(dataset, [args.expression], settings, data_root=args.data_root, workers=1,
-                               **sec_options)[0]
-            if "error" in result:
-                raise SystemExit(f"error: {result['error']}")
-        else:
-            from qlib_yahoo.alphalab.simulate import Workspace, json_safe, simulate
-
-            result = json_safe(simulate(args.expression, settings, Workspace(dataset)))
+        result = run_batch(dataset, [args.expression], settings, data_root=args.data_root, workers=1,
+                           **sec_options)[0]
+        if "error" in result:
+            raise SystemExit(f"error: {result['error']}")
         print_result(result)
         if args.json:
             args.json.write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8")
@@ -149,6 +169,9 @@ def main(args: argparse.Namespace) -> None:
     results = run_batch(dataset, read_expressions(args.file), settings, data_root=args.data_root,
                         workers=args.workers, force=args.force, progress=lambda m: print(m, flush=True),
                         **sec_options)
+    from qlib_yahoo.alphalab.batch import save_batch
+    receipt = save_batch(args.data_root, results, settings, str(dataset))
+    print(f"Saved batch evidence: {receipt}")
     ok = sorted((r for r in results if "error" not in r), key=lambda r: -(r["summary"].get("fitness") or -1e9))
     print("\nrank  fitness  sharpe  returns  turnover  selfcorr  id                alpha")
     for n, r in enumerate(ok, 1):

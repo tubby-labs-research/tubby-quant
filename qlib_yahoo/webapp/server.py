@@ -22,6 +22,7 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 from qlib_yahoo.webapp.service import ConsoleService, ServiceError, reject_recovery_options
+from qlib_yahoo.dataset import DatasetError
 
 STATIC = Path(__file__).resolve().parent / "static"
 COOKIE = "tqc"
@@ -151,7 +152,12 @@ class Handler(BaseHTTPRequestHandler):
         if length > MAX_BODY:
             return self._error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "Request too large")
         try:
-            body = json.loads(self.rfile.read(length) or b"{}")
+            raw = self.rfile.read(length) or b"{}"
+            if urlparse(self.path).path.startswith("/api/workflow-chronology-"):
+                from qlib_yahoo.target_bundle import _json as strict_json
+                body = strict_json(raw)
+            else:
+                body = json.loads(raw)
         except ValueError:
             return self._error(HTTPStatus.BAD_REQUEST, "Invalid JSON")
         if not isinstance(body, dict):
@@ -209,6 +215,19 @@ class Handler(BaseHTTPRequestHandler):
             ("POST", "alpha-groups"): lambda: service.alpha_groups(data.get("dataset"), data.get("group_overlay")),
             ("POST", "alpha-check"): lambda: service.alpha_check(str(data.get("text", "")), data.get("dataset"), **({key: data[key] for key in ("sec", "group_overlay") if key in data})),
             ("POST", "alpha-run"): lambda: service.start_alpha(data),
+            ("GET", "workflow-attempts"): lambda: service.workflow_attempts(int(data.get("limit") or 100)),
+            ("GET", "workflow-detail"): lambda: service.workflow_detail(str(data.get("id", ""))),
+            ("POST", "workflow-preview"): lambda: service.workflow_preview(data),
+            ("POST", "workflow-validate"): lambda: service.start_candidate_validation(data),
+            ("POST", "workflow-recover"): service.workflow_recover,
+            ("POST", "workflow-portfolio-preview"): lambda: service.workflow_portfolio_preview(data),
+            ("POST", "workflow-portfolio-run"): lambda: service.start_portfolio_validation(data),
+            ("POST", "workflow-chronology-preview"): lambda: service.workflow_chronology_preview(data),
+            ("POST", "workflow-chronology-declare"): lambda: service.workflow_chronology_declare(data),
+            ("POST", "workflow-chronology-trial"): lambda: service.start_chronology_trial(data),
+            ("POST", "workflow-chronology-freeze"): lambda: service.workflow_chronology_freeze(data),
+            ("POST", "workflow-chronology-final"): lambda: service.start_chronology_final(data),
+            ("POST", "workflow-chronology-view"): lambda: service.workflow_chronology_view(data),
             ("GET", "sources"): service.latest_sources,
             ("POST", "annotate"): lambda: service.annotate(data),
             ("POST", "trash-runs"): lambda: service.trash_runs(data.get("paths")),
@@ -228,15 +247,19 @@ class Handler(BaseHTTPRequestHandler):
             ("POST", "research-start"): lambda: service.start_research(data),
             ("POST", "research-demo"): lambda: service.start_research({}, demo=True),
             ("POST", "research-stop"): service.research.stop,
+            ("POST", "research-finalize"): lambda: service.finalize_research(data),
+            ("POST", "research-export"): lambda: service.research.export_batch(data),
         }
         handler = routes.get((method, name))
         if handler is None:
             return self._error(HTTPStatus.NOT_FOUND, "Unknown endpoint")
         try:
-            if name == "alpha-groups" or method == "POST" and name in ("check-alpha", "backtest", "alpha-check", "alpha-run"):
+            # Submitted Run requests reach the service's durable invocation
+            # boundary BEFORE its identical guard. Typing/discovery is not a trial.
+            if name == "alpha-groups" or method == "POST" and name in ("check-alpha", "alpha-check"):
                 reject_recovery_options(data)
             return self._json(handler())
-        except ServiceError as exc:
+        except (ServiceError, DatasetError) as exc:
             return self._error(HTTPStatus.BAD_REQUEST, str(exc))
         except ValueError as exc:
             return self._error(HTTPStatus.BAD_REQUEST, str(exc))

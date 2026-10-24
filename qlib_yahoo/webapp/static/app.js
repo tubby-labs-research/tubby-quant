@@ -8,7 +8,7 @@ const OPERATORS = new Set(["Abs", "Sign", "Log", "Power", "Greater", "Less", "If
   "Rank", "Delta", "Slope", "WMA", "EMA", "Corr", "Cov"]);
 const DEFAULTS = { gross: "1", borrow: "0.4", topk: "50", ndrop: "5", start: "", end: "", warmup: "252", cost: "5", cash: "0" };
 const MAX_COMPARE = 6;
-const VIEWS = ["research", "lab", "data", "auto"];
+const VIEWS = ["research", "lab", "data", "auto", "evidence"];
 const UI_VERSION = "workbench-cleanup-2026-10-14";
 
 const state = {
@@ -238,6 +238,7 @@ function updateSecRunButtons() {
   $("#run-2").disabled = running || !state.alphaValid;
   $("#lab-run").disabled = running || !state.labValid;
   if (state.view !== "auto") $("#run").disabled = running || !(state.view === "lab" ? state.labValid : state.alphaValid);
+  if (state.view === "evidence") workflowUpdateButtons();
 }
 function acceptSecInputs(result, engine) {
   const inputs = result.sec_inputs || result.lines?.flatMap(line => line.sec_inputs || []) || [];
@@ -596,6 +597,7 @@ function setView(view) {
   updateRunLabel();
   updateStatusRight();
   if (view === "data") { refreshDatasets(); showSources(); }
+  else if (view === "evidence") { workflowUpdateButtons(); }
   else if (view === "lab") { refreshLab(); requestAnimationFrame(() => { renderLabPeriod(); renderLabCharts(); }); }
   else if (view === "auto") { refreshResearch(); renderResearchToolbar(); }
   else {
@@ -2019,6 +2021,7 @@ function renderJob(job) {
   $("#run").disabled = running; $("#run-2").disabled = running; $("#import").disabled = running; $("#lab-run").disabled = running;
   updateSecRunButtons();
   $("#refresh-data").disabled = running;
+  if (state.view === "evidence") workflowUpdateButtons();
   if (researching) $("#run").disabled = true;
   $("#cancel").disabled = !(running && job.cancellable);
   $(".statusbar").classList.toggle("busy", running);
@@ -2037,8 +2040,16 @@ function renderJob(job) {
 }
 async function finished(job) {
   renderJob(job);
+  if (typeof workflowChronologyJobFinished === "function") workflowChronologyJobFinished(job);
   if (job.state === "cancelled") { toast("Task cancelled", job.label); return; }
   if (job.state === "failed") { toast(`${{ backtest: "Backtest", "backtest-batch": "Backtests", import: "Import", alpha: "Alpha Lab", refresh: "Refresh" }[job.kind] || "Report"} failed`, job.error || "", "bad"); setBottomTab("console"); return; }
+  if (["chronology-trial", "chronology-final"].includes(job.kind)) {
+    toast("Chronological evaluation finished", job.receipt?.access_label || job.label, "good");
+    setView("evidence");
+    await refreshWorkflow();
+    await refreshWorkflowChronology();
+    return;
+  }
   if (job.kind === "build-dictionary" || job.kind === "sec-dictionary-build" || job.kind === "sec-dictionary") {
     await searchSecDictionary(true); await Promise.all([checkAlpha(), checkLab()]); return;
   }
@@ -2063,13 +2074,14 @@ async function finished(job) {
     afterSelection();
     return;
   }
-  if (job.kind === "backtest") {
+  if (["backtest", "candidate-validation", "portfolio-validation"].includes(job.kind)) {
     toast("Backtest completed", home(job.result), "good");
     if (state.runFilter === "trash") setRunFilter("all");
     await refreshRuns();
     state.selected = [];
     afterSelection();
     await openRun(job.result);
+    if (["candidate-validation", "portfolio-validation"].includes(job.kind)) setView("research");
     if (state.resultTab === "compare" || state.resultTab === "report") setResultTab("overview");
     document.querySelector(`.run-item[data-path="${CSS.escape(job.result)}"]`)?.scrollIntoView({ block: "nearest" });
   } else if (job.kind === "import" || job.kind === "refresh") {
@@ -2227,7 +2239,7 @@ async function runLab() {
   persist();
   try { startPolling(await api("alpha-run", labValues())); } catch (e) { toast("Cannot start Alpha Lab", e.message, "bad"); }
 }
-function runCurrent() { if (state.view === "auto") startResearchCampaign(); else if (state.view === "lab") runLab(); else runBacktest(); }
+function runCurrent() { if (state.view === "evidence") runWorkflowValidation(); else if (state.view === "auto") startResearchCampaign(); else if (state.view === "lab") runLab(); else runBacktest(); }
 let labTimer = null;
 let labCheckEpoch = 0;
 function onLabInput() {
@@ -2768,6 +2780,7 @@ async function boot() {
   bind();
   session.token = (await get("session")).token;
   initializeResearch();
+  if (typeof initializeWorkflow === "function") initializeWorkflow();
   const [overview, settings] = await Promise.all([get("overview"), get("settings").catch(() => ({}))]);
   state.overview = overview; state.settings = preferenceObject(settings);
   const savedSec = preferenceObject(state.settings.sec);

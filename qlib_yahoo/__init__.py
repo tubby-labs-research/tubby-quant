@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 
+__version__ = "0.2.0"  # read by pyproject.toml; bumped per public release
+
 
 def default_data_root() -> str:
     """Windows keeps D:\\Qlib; macOS/Linux use ~/Qlib. TUBBY_QLIB_DATA_ROOT overrides both."""

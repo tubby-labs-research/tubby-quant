@@ -438,9 +438,17 @@ def _stats(pnl: np.ndarray, traded: np.ndarray, booksize: float) -> dict[str, An
             "drawdown": drawdown / (booksize / 2), "pnl": float(np.sum(pnl))}
 
 
-def simulate(expression: str, settings: Settings, workspace: Workspace, *, keep_weights: bool = False) -> dict[str, Any]:
-    """Evaluate and simulate one alpha; return metrics, yearly table, checks and the daily PnL."""
+def simulate(expression: str, settings: Settings, workspace: Workspace, *, keep_weights: bool = False,
+             keep_decision_targets: bool = False) -> dict[str, Any]:
+    """Simulate the continuous path, then optionally score selected observations.
+
+    Observation filtering never changes signals, holdings or trading costs. Its
+    metrics describe conditional daily observations, not an investable time path.
+    """
     settings = settings.validate()
+    if settings.evaluation_sessions is not None and keep_decision_targets:
+        raise DatasetError("evaluation_sessions observation filtering cannot produce decision targets; "
+                           "Qlib handoff does not implement masked trading")
     members = workspace.universe(settings.universe)
     first, start, end = workspace.window(settings)
     context = workspace.context(first, end, members)
@@ -463,6 +471,35 @@ def simulate(expression: str, settings: Settings, workspace: Workspace, *, keep_
     pnl = gross_pnl - traded * settings.booksize * settings.cost_bps / 1e4
     dates = context.dates[offset:]
     test_w = w[offset:]
+    test_members = context.members[offset:]
+    evaluation = None
+    if settings.evaluation_sessions is not None:
+        selected_dates = np.asarray(settings.evaluation_sessions, dtype="datetime64[D]")
+        missing = selected_dates[~np.isin(selected_dates, dates)]
+        if len(missing):
+            raise DatasetError("evaluation_sessions absent from observed calendar: "
+                               + ", ".join(str(day) for day in missing))
+        rows = np.isin(dates, selected_dates)
+        evaluation = {
+            "policy": "observation-filter-v1",
+            "observed_start": str(dates[0]), "observed_end": str(dates[-1]),
+            "observed_count": len(dates),
+            "selected_sessions": list(settings.evaluation_sessions),
+            "selected_count": int(rows.sum()),
+            "metrics_meaning": (
+                "Conditional selected-session metrics: 252-session annualization of selected daily "
+                "observations; drawdown uses compressed selected PnL, not continuous investment return. "
+                "Each retained observation keeps its full-path trading costs; omitted dates do not "
+                "reset signal or portfolio state."
+            ),
+            "diagnostics_scope": (
+                "Signal/neutralization diagnostics cover the full unfiltered observed window on the "
+                "continuous signal/weight path. Warmup influences state but is not counted in these "
+                "diagnostics; they are not recomputed on selected sessions."
+            ),
+        }
+        dates, pnl, traded = dates[rows], pnl[rows], traded[rows]
+        test_w, test_members = test_w[rows], test_members[rows]
     longs = (test_w > 0).sum(axis=1)
     shorts = (test_w < 0).sum(axis=1)
     summary = _stats(pnl, traded, settings.booksize)
@@ -472,7 +509,7 @@ def simulate(expression: str, settings: Settings, workspace: Workspace, *, keep_
         "gross_exposure": float(np.mean(np.abs(test_w).sum(axis=1))),
         "net_exposure": float(np.mean(test_w.sum(axis=1))),
         "max_weight": float(np.abs(test_w).max(initial=0.0)),
-        "coverage": float(np.mean((longs + shorts) / np.maximum(context.members[offset:].sum(axis=1), 1))),
+        "coverage": float(np.mean((longs + shorts) / np.maximum(test_members.sum(axis=1), 1))),
         "start": str(dates[0]), "end": str(dates[-1]),
     })
     years = dates.astype("datetime64[Y]").astype(int) + 1970
@@ -495,9 +532,17 @@ def simulate(expression: str, settings: Settings, workspace: Workspace, *, keep_
         "daily": {"dates": [str(d) for d in dates], "pnl": pnl.astype(np.float64).tolist(),
                   "turnover": traded.astype(np.float64).tolist()},
     }
+    if evaluation is not None:
+        result["evaluation"] = evaluation
     if keep_weights:
         result["weights"] = test_w
         result["symbols"] = workspace.symbols
+    if keep_decision_targets:
+        # Already delayed/decayed/masked/neutralized/capped. The preceding
+        # close is needed for the first validation day's following-open fill.
+        result["decision_targets"] = {"dates": [str(d) for d in context.dates[offset - 1:-1]],
+                                      "symbols": list(workspace.symbols),
+                                      "weights": w[offset - 1:-1]}
     return result
 
 

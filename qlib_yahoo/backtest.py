@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import gc
+import hashlib
 import gzip
 import io
 import math
@@ -21,6 +23,7 @@ from qlib_yahoo import QLIB_COMMIT, QLIB_RELEASE
 from qlib_yahoo.dataset import DatasetError, sha256
 from qlib_yahoo.dataset_integrity import verify_dataset
 from qlib_yahoo.expressions import validate_alpha
+from qlib_yahoo.workflow_submission import current_submission, record_backtest_submission
 
 
 def _now() -> str:
@@ -97,6 +100,7 @@ def _write_table(frame: Any, path: Path) -> None:
     frame.to_parquet(path, engine="pyarrow", compression="zstd", index=False)
 
 
+@record_backtest_submission
 def run_backtest(
     dataset: Path, alpha: str, start: str | None = None, end: str | None = None,
     topk: int = 5, n_drop: int = 1, initial_cash: float = 100_000,
@@ -110,6 +114,8 @@ def run_backtest(
     history_mode: str | None = None,
     runtime_profile: str = "auto",
     sec: dict | None = None,
+    target_bundle: dict | None = None,
+    portfolio_risk: dict | None = None,
     _preparation=None,
     _cancel_file: str | None = None,
     _signed_pin_path: str | None = None,
@@ -127,13 +133,91 @@ def run_backtest(
     _row_range_manifest: str | None = None,
     _installed_range_root: str | None = None,
 ) -> Path:
+    """Seal the simulation, release its private graph, then replay saved outputs."""
+    from qlib_yahoo.performance import RunPerformance
+
+    performance = RunPerformance()
+    run_dir, evaluated_start, evaluated_end = _run_backtest_to_sealed(
+        dataset, alpha, start, end, topk, n_drop, initial_cash, cost_per_side, open_report,
+        annual_cash_rate=annual_cash_rate, warmup_sessions=warmup_sessions,
+        risk_degree=risk_degree, report_level=report_level, holdings=holdings,
+        threshold=threshold, min_observations=min_observations,
+        strategy_mode=strategy_mode, gross_exposure=gross_exposure,
+        annual_borrow_rate=annual_borrow_rate, universe=universe, signal_transform=signal_transform,
+        execution_profile=execution_profile, history_mode=history_mode, runtime_profile=runtime_profile,
+        sec=sec, target_bundle=target_bundle, portfolio_risk=portfolio_risk,
+        _preparation=_preparation, _cancel_file=_cancel_file, _signed_pin_path=_signed_pin_path,
+        _ordered_session=_ordered_session, _compiler_path=_compiler_path,
+        _compiled_targets=_compiled_targets, _columnar_history=_columnar_history,
+        _flat_indicators=_flat_indicators, _buffered_history=_buffered_history,
+        _decision_gzip_level=_decision_gzip_level, _gzip_path=_gzip_path, _isal_level=_isal_level,
+        _index_reuse=_index_reuse, _numeric_projection=_numeric_projection,
+        _row_range_manifest=_row_range_manifest, _installed_range_root=_installed_range_root,
+        performance=performance,
+    )
+    # The helper frame and its closure cells are gone. Account/strategy/executor
+    # cycles can now die before the renderer loads another copy of saved data.
+    # Caller-owned preparation keeps its exchange and immutable feature cache.
+    gc.collect()
+
+    print(f"Backtest completed: {run_dir}")
+    print(f"Evaluation: {evaluated_start} to {evaluated_end}; annual cash-rate assumption: {annual_cash_rate:g}")
+    try:
+        from qlib_yahoo.analysis import render_report
+
+        effective_level = "overview" if open_report and report_level == "summary" else report_level
+        print(f"Rendering the {effective_level} report ...", flush=True)
+        report_path = performance.call("report rendering", render_report, run_dir, level=effective_level, holdings=holdings,
+                                     threshold=threshold, min_observations=min_observations)
+        print(f"Report: {report_path}")
+        if open_report:
+            webbrowser.open(report_path.as_uri())
+    except Exception as error:
+        print(f"Report warning (simulation remains completed): {error}", file=sys.stderr)
+    return run_dir
+
+
+def _run_backtest_to_sealed(
+    dataset: Path, alpha: str, start: str | None = None, end: str | None = None,
+    topk: int = 5, n_drop: int = 1, initial_cash: float = 100_000,
+    cost_per_side: float = 0.0005, open_report: bool = False,
+    *, annual_cash_rate: float = 0.0, warmup_sessions: int = 252,
+    risk_degree: float = 0.95, report_level: str = "summary", holdings: str = "auto",
+    threshold: float = 1.3, min_observations: int = 252,
+    strategy_mode: str = "long-only", gross_exposure: float = 1.0,
+    annual_borrow_rate: float = 0.004, universe: str | None = None, signal_transform: str = "raw",
+    execution_profile: str = "fast", history_mode: str | None = None, runtime_profile: str = "auto",
+    sec: dict | None = None, target_bundle: dict | None = None, portfolio_risk: dict | None = None,
+    _preparation=None, _cancel_file: str | None = None, _signed_pin_path: str | None = None,
+    _ordered_session: bool = False, _compiler_path: str | None = None,
+    _compiled_targets: bool = False, _columnar_history: bool = False,
+    _flat_indicators: bool = False, _buffered_history: bool = False,
+    _decision_gzip_level: int | None = None, _gzip_path: str | None = None, _isal_level: int | None = None,
+    _index_reuse: bool = False, _numeric_projection: bool = False,
+    _row_range_manifest: str | None = None, _installed_range_root: str | None = None,
+    performance,
+) -> tuple[Path, str, str]:
+    """Own all run-local simulation state through successful artifact sealing."""
     # Retain only a rejection boundary for archived V4 requests.
     if _numeric_projection is not False:
         raise DatasetError("numeric projection (V4) is unsupported: the experiment was retired")
     from qlib_yahoo.signed import SIGNAL_TRANSFORMS, WEIGHT_FORMULAS
-    from qlib_yahoo.performance import RunPerformance
-
-    performance = RunPerformance()
+    risk_policy = None
+    if portfolio_risk is not None:
+        if strategy_mode != "signed":
+            raise DatasetError("portfolio_risk requires signed mode")
+        from qlib_yahoo.portfolio_runtime import validate_portfolio_risk
+        risk_policy = validate_portfolio_risk(portfolio_risk)
+    supplied_targets = None
+    if target_bundle is not None:
+        if strategy_mode != "signed" or signal_transform != "raw" or gross_exposure != 1 or isinstance(gross_exposure, bool):
+            raise DatasetError("target_bundle requires signed mode, signal_transform=raw and gross_exposure=1; no second transformation")
+        if sec is not None:
+            raise DatasetError("target_bundle already contains transformed targets; SEC expression configuration is not applicable")
+        from qlib_yahoo.target_bundle import load_bundle
+        supplied_targets = performance.call("target bundle verification", load_bundle, target_bundle)
+        # Internal syntax sentinel only: never evaluated or recorded as alpha evidence.
+        alpha = "$close"
     from qlib_yahoo.expressions import check_alpha_syntax
     from qlib_yahoo.sec_resolution import resolve_config
 
@@ -237,7 +321,19 @@ def run_backtest(
         _index_reuse, _row_range_manifest is not None,
         _installed_range_root is not None,
     ))
-    if runtime_profile == "native":
+    if risk_policy is not None:
+        # Independent per-session projection and post-fill observation use the
+        # native sequential hooks. Decline accelerators explicitly, before loading
+        # compilers or selecting an automatic recipe; ordinary runs are unchanged.
+        profile_identity.update(selection="portfolio_risk_native_fills",
+            reason="independent risk requires native decision/projection/post-fill hooks",
+            declined={"automatic_accepted_recipe": runtime_profile == "auto",
+                      "fast_strategy_exchange": execution_profile == "fast",
+                      "ordered_session": _ordered_session, "compiled_targets": _compiled_targets,
+                      "date_range_helper": _row_range_manifest is not None or _installed_range_root is not None})
+        _ordered_session = _compiled_targets = False
+        _compiler_path = _row_range_manifest = _installed_range_root = None
+    elif runtime_profile == "native":
         profile_identity["reason"] = "explicit_native_profile"
     elif explicit_options:
         profile_identity.update(selection="explicit_options", reason="preserve_explicit_experiment")
@@ -262,7 +358,8 @@ def run_backtest(
         from qlib_yahoo.runtime import ensure_signed_runtime
         signed_identity = performance.call("runtime verification", ensure_signed_runtime) if _signed_pin_path is None else (
             performance.call("runtime verification", ensure_signed_runtime, pin_path=Path(_signed_pin_path)))
-    required_history = (validate_alpha(alpha, extra_features=sec_bindings) if sec_bindings else validate_alpha(alpha))
+    required_history = (0 if supplied_targets is not None else
+                        (validate_alpha(alpha, extra_features=sec_bindings) if sec_bindings else validate_alpha(alpha)))
     if warmup_sessions < required_history + 1:
         raise DatasetError(f"warmup needs at least {required_history + 1} sessions for alpha history and prior-close signal")
 
@@ -319,7 +416,8 @@ def run_backtest(
     dataset = Path(dataset).absolute()
     dataset_manifest_path = dataset / "manifest.json"
     try:
-        dataset_manifest = json.loads(dataset_manifest_path.read_text(encoding="utf-8"))
+        dataset_manifest_bytes = dataset_manifest_path.read_bytes()
+        dataset_manifest = json.loads(dataset_manifest_bytes.decode("utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise DatasetError(f"cannot read dataset manifest {dataset_manifest_path}: {error}") from error
     if not isinstance(dataset_manifest, dict):
@@ -336,6 +434,11 @@ def run_backtest(
         raise DatasetError("topk must be smaller than the trade universe")
     print(f"Verifying dataset {dataset.name} ...", flush=True)
     integrity = performance.call("dataset verification", verify_dataset, dataset, dataset_manifest)
+    if supplied_targets is not None:
+        verified_manifest_digest = hashlib.sha256(dataset_manifest_bytes).hexdigest()
+        if (supplied_targets["metadata"]["dataset_manifest_sha256"] != verified_manifest_digest
+                or sha256(dataset_manifest_path) != verified_manifest_digest):
+            raise DatasetError("target bundle dataset manifest digest does not match verified dataset")
     spans = universe_record = None
     if universe is not None:
         from qlib_yahoo.universe import load_dataset_universe, mask_to_members, members_between
@@ -390,6 +493,7 @@ def run_backtest(
             "date_index_reuse": _index_reuse,
             "date_row_comparison": range_identity,
             "runtime_profile": profile_identity,
+            **({"portfolio_risk": risk_policy} if risk_policy is not None else {}),
             **({"sec": {"source": sec_identity, "materialized": sec_handle["identity"],
                         **({"registry": registry} if registry else {})}}
                if sec_handle is not None else {}),
@@ -466,6 +570,13 @@ def run_backtest(
     if not eligible or (strategy_mode == "long-only" and len(eligible) <= topk):
         raise DatasetError("too few symbols have complete warmup close history" if spans is None
                            else f"universe {universe} has too few members between {signal_start:%Y-%m-%d} and {signal_end:%Y-%m-%d}")
+    target_weights = None
+    if supplied_targets is not None:
+        from qlib_yahoo.target_bundle import align_bundle
+        target_weights = align_bundle(
+            supplied_targets, sessions=sessions,
+            signal_days=sessions[(sessions >= signal_start) & (sessions <= signal_end)],
+            symbols=symbols, eligible=eligible, spans=spans)
     if strategy_mode == "signed" and not (_preparation is not None and _preparation.factor_validated):
         factor = performance.call("factor validation data", D.features, eligible, ["$factor"], start_time=signal_start,
                             end_time=end_day, freq="day", disk_cache=0)
@@ -554,6 +665,18 @@ def run_backtest(
         }
         backtest_contract["execution_contract"] = execution
         backtest_contract["strategy_mode"] = "signed"
+    if supplied_targets is not None:
+        backtest_contract["input_mode"] = "target_weights"
+        backtest_contract["required_alpha_history"] = None
+        execution.update(
+            input_mode="target_weights", score_timing="supplied session-close decision targets; dates unchanged",
+            signal_transform=None, weight_formula="supplied targets unchanged; no gross normalization",
+            neutralization="already applied by supplied weight_policy",
+            eligibility_exclusion_policy="reject nonzero ineligible/nonmember targets; preserve explicit zeros")
+        if spans is not None:
+            backtest_contract["universe"].update(
+                masking="no target masking; reject nonzero targets outside dated membership",
+                exit_policy="explicit zeros and omitted held symbols target liquidation, subject to fills")
     source_dir = Path(__file__).resolve().parent
     manifest: dict[str, Any] = {
         "schema_version": 6, "strategy_mode": strategy_mode,
@@ -572,11 +695,26 @@ def run_backtest(
         "python": sys.version.split()[0], "packages": _versions(),
         "qlib_reviewed_source": {"release": QLIB_RELEASE, "commit": QLIB_COMMIT,
                                   "installed_vcs_commit_verified": False},
-        "alpha": alpha, "backtest": backtest_contract,
+        "alpha": "Supplied close-decision target weights" if supplied_targets is not None else alpha,
+        "backtest": backtest_contract,
         "history_storage": {"mode": history_mode, "account_reset_at_boundaries": False,
                             "positions_order": "datetime,instrument"},
         "runtime_profile": profile_identity,
     }
+    if supplied_targets is not None:
+        manifest.update(input_mode="target_weights",
+                        target_bundle={"identity": supplied_targets["identity"], "metadata": supplied_targets["metadata"]},
+                        score_table_semantics="alpha_scores.parquet score column contains supplied target weights, not raw alpha")
+        manifest["runner_source_sha256"]["target_bundle.py"] = sha256(source_dir / "target_bundle.py")
+    if risk_policy is not None:
+        manifest["portfolio_risk"] = {"policy": risk_policy, "status": "pending_native_hooks"}
+        for name in ("portfolio_runtime.py", "portfolio.py", "classification.py"):
+            manifest["runner_source_sha256"][name] = sha256(source_dir / name)
+    submitted = current_submission()
+    if submitted:
+        manifest["workflow"] = {"attempt_id": submitted["id"],
+                                "data_root": str(submitted["store"].root.parent),
+                                "contract": "submitted-attempt-v1"}
     if sec_handle is not None:
         # Additive provenance: schema 6 tables and execution semantics are unchanged.
         manifest["sec"] = {"catalog": str(sec_catalog), "bindings": sec_bindings,
@@ -593,6 +731,8 @@ def run_backtest(
             "expression_evaluation": "unchanged native per-instrument ExpressionD.expression",
             "unsupported_layouts": "native assembly fallback; no repeated expression evaluation",
         }
+        if supplied_targets is not None:
+            manifest["data_preparation"]["expression_evaluation"] = "bypassed for supplied targets; price/factor checks retained"
         for name in ("signed.py", "runtime.py"):
             manifest["runner_source_sha256"][name] = sha256(source_dir / name)
         if profile_identity.get("name") == "accepted-v1":
@@ -625,16 +765,19 @@ def run_backtest(
     manifest_path = run_dir / "manifest.json"
     _atomic_json(manifest_path, manifest)
     history_writer = None
+    risk_runtime = None
     try:
         manifest["stage"] = "scoring"
         _atomic_json(manifest_path, manifest)
-        print(f"Scoring the alpha for {len(eligible):,} instruments from {warmup_start:%Y-%m-%d} ...", flush=True)
+        print(("Loading supplied close-decision targets ..." if supplied_targets is not None else
+               f"Scoring the alpha for {len(eligible):,} instruments from {warmup_start:%Y-%m-%d} ..."), flush=True)
         feature_call = performance.call if _preparation is None else (
             lambda stage, provider, *args, **kwargs: _preparation.features(performance, stage, provider, *args, **kwargs))
-        feature = feature_call("alpha evaluation", D.features, eligible, [alpha], start_time=warmup_start, end_time=signal_end,
-                             freq="day", disk_cache=0)
+        feature = (None if supplied_targets is not None else
+                   feature_call("alpha evaluation", D.features, eligible, [alpha], start_time=warmup_start, end_time=signal_end,
+                                freq="day", disk_cache=0))
         signal_days = sessions[(sessions >= signal_start) & (sessions <= signal_end)]
-        if spans is not None:
+        if spans is not None and supplied_targets is None:
             in_window = feature[alpha].reorder_levels(["datetime", "instrument"]).sort_index()
             in_window = mask_to_members(in_window.loc[in_window.index.get_level_values("datetime").isin(signal_days)], spans)
             scored = np.isfinite(in_window.to_numpy(dtype=float))
@@ -652,9 +795,13 @@ def run_backtest(
                 raise DatasetError(f"universe {universe} has no scored member on {empty.index[0]:%Y-%m-%d}")
             del in_window, scored, per_day, empty
         if strategy_mode == "signed":
-            from qlib_yahoo.signed import normalize_scores
-            scores, weights = performance.call("signed target weights", normalize_scores, feature, alpha, eligible, signal_days, gross_exposure, spans=spans,
-                                               transform=signal_transform)
+            if supplied_targets is not None:
+                weights = target_weights
+                scores = weights.rename("score")
+            else:
+                from qlib_yahoo.signed import normalize_scores
+                scores, weights = performance.call("signed target weights", normalize_scores, feature, alpha, eligible, signal_days, gross_exposure, spans=spans,
+                                                   transform=signal_transform)
             daily_gross = weights.abs().groupby(level="datetime").sum()
             if (daily_gross > 1 + 1e-12).any():
                 raise DatasetError(f"signed target normalization exceeds account exposure: {daily_gross.max()}")
@@ -674,15 +821,19 @@ def run_backtest(
         label_path = run_dir / "signal_forward_labels.parquet"
         label_temp = run_dir / "signal_forward_labels.parquet.tmp"
         try:
-            label = feature_call("diagnostic labels", D.features, eligible, ["Ref($open, -2)/Ref($open, -1)-1"],
-                               start_time=signal_start, end_time=signal_end, freq="day", disk_cache=0)
-            label.columns = ["label"]
-            label = label.reorder_levels(["datetime", "instrument"]).sort_index()
-            paired = pd.concat((scores.rename("score"), label), axis=1)
-            _write_table(paired.reset_index(), label_temp)
-            os.replace(label_temp, label_path)
-            manifest["diagnostics"] = {"forward_labels": "available"}
-            del label, paired
+            if supplied_targets is not None:
+                manifest["diagnostics"] = {"forward_labels": "not_requested",
+                                           "reason": "supplied targets are not raw alpha scores"}
+            else:
+                label = feature_call("diagnostic labels", D.features, eligible, ["Ref($open, -2)/Ref($open, -1)-1"],
+                                   start_time=signal_start, end_time=signal_end, freq="day", disk_cache=0)
+                label.columns = ["label"]
+                label = label.reorder_levels(["datetime", "instrument"]).sort_index()
+                paired = pd.concat((scores.rename("score"), label), axis=1)
+                _write_table(paired.reset_index(), label_temp)
+                os.replace(label_temp, label_path)
+                manifest["diagnostics"] = {"forward_labels": "available"}
+                del label, paired
         except Exception as error:
             label_temp.unlink(missing_ok=True)
             manifest["diagnostics"] = {"forward_labels": "unavailable",
@@ -700,7 +851,7 @@ def run_backtest(
             from qlib.backtest.signed_account import SignedAccount
             from qlib.backtest.signed_exchange import SignedExchange
             from qlib.contrib.strategy.signed_weight import SignedWeightStrategy
-            if execution_profile == "fast":
+            if execution_profile == "fast" and risk_policy is None:
                 from qlib_yahoo.fast_account import account_class_for
                 from qlib_yahoo.fast_signed import classes_for
                 SignedAccount = account_class_for(signed_identity["commit"])
@@ -769,6 +920,21 @@ def run_backtest(
                     limit_threshold=effective_limit, volume_threshold=None,
                     open_cost=cost_per_side, close_cost=cost_per_side,
                     min_cost=0.0, impact_cost=0.0, **quote_options)
+        if risk_policy is not None:
+            from qlib_yahoo.portfolio_runtime import PortfolioRiskRuntime
+            risk_runtime = performance.call("portfolio risk input preparation", PortfolioRiskRuntime,
+                risk_policy, dataset=dataset, symbols=eligible,
+                decision_start=signal_start, decision_end=signal_end,
+                artifact_path=run_dir / PortfolioRiskRuntime.artifact_name)
+            risk_runtime.attach(strategy, account, exchange)
+            manifest["portfolio_risk"] = risk_runtime.snapshot()
+            manifest["execution_acceleration"] = {
+                "selection": "portfolio_risk_native_fills",
+                "fills": "native sequential SignedExchange; copied native projection before orders",
+                "executor": "exact native daily serial SimulatorExecutor",
+                "fallback_reason": "independent risk hooks require per-session observation; ordered/compiled accelerators declined",
+                "requested_profile": execution_profile, "fastmath": False}
+            _atomic_json(manifest_path, manifest)
         if _cancel_file is not None:
             from qlib_yahoo.preparation import check_cancel
             original_decision = strategy.generate_trade_decision
@@ -800,6 +966,8 @@ def run_backtest(
                      "min_cost": 0.0, "impact_cost": 0.0, **quote_options},
             )
         report, positions = portfolio["1day"]
+        if risk_runtime is not None:
+            manifest["portfolio_risk"] = risk_runtime.close(completed=True)
         if order_batch is not None:
             manifest["execution_acceleration"]["ordered_session"] = order_batch.snapshot()
             manifest["execution_acceleration"]["fills"] = "guarded complete ordered-session kernel; native per-order fallback"
@@ -871,6 +1039,8 @@ def run_backtest(
                                 "brain_equivalent": False},
             "metrics": metrics, "backtest": backtest_contract,
         }
+        if risk_runtime is not None:
+            summary["portfolio_risk"] = risk_runtime.snapshot()
         if strategy_mode == "signed":
             summary["metrics_status"] = {"strategy": "unavailable" if undefined else "available",
                                          "reason": "nonpositive_equity" if undefined else None,
@@ -880,6 +1050,9 @@ def run_backtest(
                                         "max_unfunded_cash_shortfall": float(daily["unfunded_cash_shortfall"].max()),
                                         "stale_mark_sessions": int(daily["stale_marks"].sum())}
         _atomic_json(run_dir / "summary.json", summary)
+        for name, expected in manifest["runner_source_sha256"].items():
+            if sha256(source_dir / name) != expected:
+                raise DatasetError(f"runner implementation changed during execution: {name}")
         manifest["stage"] = "sealed"
         manifest["status"] = "completed"
         manifest["completed_at_utc"] = _now()
@@ -892,6 +1065,8 @@ def run_backtest(
         }
         _atomic_json(manifest_path, manifest)
     except BaseException as error:  # also a cancel (SIGTERM becomes KeyboardInterrupt in the worker)
+        if risk_runtime is not None:
+            manifest["portfolio_risk"] = risk_runtime.close(completed=False)
         if history_writer is not None:
             try:
                 history_writer.close(completed=False)
@@ -904,18 +1079,4 @@ def run_backtest(
         _atomic_json(manifest_path, manifest)
         raise
 
-    print(f"Backtest completed: {run_dir}")
-    print(f"Evaluation: {backtest_contract['start']} to {backtest_contract['end']}; annual cash-rate assumption: {annual_cash_rate:g}")
-    try:
-        from qlib_yahoo.analysis import render_report
-
-        effective_level = "overview" if open_report and report_level == "summary" else report_level
-        print(f"Rendering the {effective_level} report ...", flush=True)
-        report_path = performance.call("report rendering", render_report, run_dir, level=effective_level, holdings=holdings,
-                                    threshold=threshold, min_observations=min_observations)
-        print(f"Report: {report_path}")
-        if open_report:
-            webbrowser.open(report_path.as_uri())
-    except Exception as error:
-        print(f"Report warning (simulation remains completed): {error}", file=sys.stderr)
-    return run_dir
+    return run_dir, backtest_contract["start"], backtest_contract["end"]

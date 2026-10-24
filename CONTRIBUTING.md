@@ -35,10 +35,15 @@ Signed-off-by: Your Name <your-email@example.com>
 From the source folder, run the offline tests with the installed Python:
 
 ```powershell
-.\env\qlib\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
+.\env\qlib\Scripts\python.exe scripts\run_tests.py
 ```
 
-On macOS use `env/qlib/bin/python`. Read skips: optional packages, native runtime
+On macOS use `env/qlib/bin/python scripts/run_tests.py`. The runner discovers
+`tests/` exactly like `python -m unittest discover -s tests -p "test_*.py"`, but
+from a canonical temporary root: on macOS the default temporary directory is a
+link alias (`/var` to `/private/var`), which the project's link-rejection checks
+would otherwise refuse before the tested behaviour runs. `-p` and `-k` narrow a
+run. Read skips: optional packages, native runtime
 and platform requirements can exclude checks. CI runs a bounded core suite on
 Linux and Windows import/installer checks; it does not certify native signed fills,
 desktop windows or clean-machine installs. Keep model calls and data downloads
