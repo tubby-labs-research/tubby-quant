@@ -118,6 +118,25 @@ def position_schema_and_shared():
     return schema, shared
 
 
+def position_column_reference(position, shared, equity, schema):
+    """Pre-broadcast complete caller, including list construction/conversion."""
+    import pyarrow as pa
+    instruments, amounts, prices, values, weights = [], [], [], [], []
+    for symbol in sorted(position.get_stock_list()) or [""]:
+        amount = float(position.get_stock_amount(symbol)) if symbol else 0.0
+        price = float(position.get_stock_price(symbol)) if symbol else None
+        value = amount * price if symbol else 0.0
+        instruments.append(symbol)
+        amounts.append(amount)
+        prices.append(price)
+        values.append(value)
+        weights.append(value / equity if equity > 0 else float("nan"))
+    columns = {name: [value] * len(instruments) for name, value in shared.items()}
+    columns.update(instrument=instruments, amount=amounts, price=prices,
+                   value=values, weight=weights)
+    return pa.Table.from_pydict(columns, schema=schema)
+
+
 def assert_position_tables(test, old, new):
     import numpy as np
     import pandas as pd
@@ -190,6 +209,227 @@ class PositionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "injected getter failure"):
             position_table(position, shared, 100., schema)
         self.assertEqual(calls, [("stock_list",), ("amount", "A"), ("price", "A")])
+
+
+@unittest.skipUnless(importlib.util.find_spec("pyarrow"), "optional PyArrow unavailable")
+class PositionBroadcastTests(unittest.TestCase):
+    def compare(self, schema, shared, book=None, equity=100.):
+        book = {"Z": (-0., 1.), "A": (2., 3.), "雪🌍": (-3., 4.)} if book is None else book
+        outputs, calls = [], []
+        for builder in (position_column_reference, position_table):
+            observed = []
+            outputs.append(builder(PositionTests.Position(book, observed), shared, equity, schema))
+            calls.append(observed)
+        self.assertEqual(*calls)
+        assert_position_tables(self, *outputs)
+        return outputs[1]
+
+    def test_shared_conversion_once_per_column_with_public_hook(self):
+        import pyarrow as pa
+        schema, shared = position_schema_and_shared()
+        with patch.object(pa, 'scalar', wraps=pa.scalar) as scalar, \
+                patch.object(pa, 'repeat', wraps=pa.repeat) as repeat:
+            self.compare(schema, shared)
+        self.assertEqual(scalar.call_count, len(shared))
+        self.assertEqual(repeat.call_count, len(shared))
+        for call in scalar.call_args_list:
+            self.assertIs(call.kwargs['from_pandas'], False)
+        for call in repeat.call_args_list:
+            self.assertEqual(call.args[1], 3)
+
+    def test_supported_scalar_types_and_parquet_bytes(self):
+        import numpy as np
+        schema, shared = position_schema_and_shared()
+        numeric = [None, -0., 0., 1, -3, float('nan'), float('inf'), -float('inf'),
+                   np.nextafter(0., 1.), 1e300]
+        for kind in (np.float16, np.float32, np.float64, np.int8, np.int16, np.int32,
+                     np.int64, np.uint8, np.uint16, np.uint32, np.uint64):
+            numeric.append(kind(7))
+        for value in numeric:
+            with self.subTest(value=value, kind=type(value)):
+                self.compare(schema, {**shared, 'cash': value})
+        for name, values in (('funding_feasible', [True, False, np.bool_(True), None]),
+                             ('stale_mark_symbols', ['', '雪🌍\\"\n', np.str_('雪'), None])):
+            for value in values:
+                self.compare(schema, {**shared, name: value})
+
+    def test_valid_nan_payloads_signed_zero_and_null_masks(self):
+        import numpy as np
+        schema, shared = position_schema_and_shared()
+        for bits in (0x7ff8000000001234, 0xfff800000000abcd, 0x7ff0000000001234,
+                     0x8000000000000000, 1):
+            scalar = np.array([bits], dtype=np.uint64).view(np.float64)[0]
+            for value in (scalar, float(scalar)):
+                new = self.compare(schema, {**shared, 'cash': value})
+                self.assertEqual(new['cash'].null_count, 0)
+                np.testing.assert_array_equal(new['cash'].to_numpy().view(np.uint64),
+                                              np.array([bits] * 3, dtype=np.uint64))
+
+    def test_timestamps_units_nat_null_and_metadata(self):
+        from datetime import datetime
+        import numpy as np
+        import pandas as pd
+        import pyarrow as pa
+        schema, shared = position_schema_and_shared()
+        for unit in ('s', 'ms', 'us', 'ns'):
+            current = schema.set(0, pa.field('datetime', pa.timestamp(unit),
+                                           metadata={b'field': b'preserve'}))
+            for value in (datetime(2025, 1, 2), pd.Timestamp('2025-01-02').as_unit(unit),
+                          np.datetime64('2025-01-02', unit), None, np.datetime64('NaT', unit)):
+                with self.subTest(unit=unit, value=value):
+                    self.compare(current, {**shared, 'datetime': value})
+        # Precision mismatch/overflow uses original error behavior, never truncates.
+        current = schema.set(0, pa.field('datetime', pa.timestamp('ms')))
+        self.compare(current, {**shared, 'datetime': pd.Timestamp('2025-01-02 00:00:00.123456789')})
+
+    def test_empty_insolvent_and_exact_getter_conversion_order(self):
+        schema, shared = position_schema_and_shared()
+        for book in ({}, {'': (99., 99.)}, {'Z': (-0., 1.), 'A': (-2., 3.)}):
+            for equity in (100., 0., -1., float('nan')):
+                self.compare(schema, shared, book, equity)
+
+    def test_custom_values_whole_table_fallback_counts_and_errors(self):
+        import pyarrow as pa
+        schema, shared = position_schema_and_shared()
+        class Custom:
+            def __init__(self, calls, fail=False):
+                self.calls, self.fail = calls, fail
+            def __repr__(self):
+                self.calls.append('repr')
+                return 'CustomSharedValue'
+            def __float__(self):
+                self.calls.append('float')
+                if self.fail:
+                    raise ValueError('original custom error')
+                return 3.5
+        for fail in (False, True):
+            outcomes, events = [], []
+            for builder in (position_column_reference, position_table):
+                calls = []
+                fields = {**shared, 'cash': Custom(calls, fail)}
+                # A supported earlier column must not be speculatively converted.
+                with patch.object(pa, 'scalar', side_effect=AssertionError('broadcast before fallback')):
+                    try:
+                        table = builder(PositionTests.Position({'A': (1., 2.), 'B': (3., 4.)}, calls), fields, 100., schema)
+                        outcomes.append(table)
+                    except Exception as error:
+                        outcomes.append((type(error), str(error)))
+                events.append(calls)
+            self.assertEqual(*events)
+            if isinstance(outcomes[0], tuple):
+                self.assertEqual(*outcomes)
+            else:
+                assert_position_tables(self, *outcomes)
+
+    def test_custom_metaclass_equality_never_used_by_guard(self):
+        import pyarrow as pa
+        schema, shared = position_schema_and_shared()
+        class Meta(type):
+            def __eq__(self, other):
+                raise AssertionError('custom type equality')
+        class Custom(metaclass=Meta):
+            def __repr__(self):
+                return 'CustomTypeValue'
+        value = Custom()
+        outcomes = []
+        for builder in (position_column_reference, position_table):
+            with patch.object(pa, 'scalar', side_effect=AssertionError('premature scalar')):
+                try:
+                    builder(PositionTests.Position({'A': (1., 2.)}, []),
+                            {**shared, 'cash': value}, 100., schema)
+                except Exception as error:
+                    outcomes.append((type(error), str(error)))
+        self.assertEqual(len(outcomes), 2)
+        self.assertEqual(*outcomes)
+        self.assertIs(outcomes[0][0], pa.ArrowInvalid)
+
+    def test_custom_equity_and_weights_keep_whole_conversion_order(self):
+        import pyarrow as pa
+        schema, shared = position_schema_and_shared()
+        for derived in (False, True):
+            for fail in (False, True):
+                outcomes, events = [], []
+                for builder in (position_column_reference, position_table):
+                    calls = []
+                    class Weight:
+                        def __float__(self):
+                            calls.append('weight float')
+                            raise ValueError('custom weight conversion')
+                        def __repr__(self):
+                            calls.append('weight repr')
+                            return 'CustomWeight'
+                    class Equity(float if derived else object):
+                        def __gt__(self, other):
+                            calls.append(('equity gt', other))
+                            return True
+                        def __rtruediv__(self, value):
+                            calls.append(('equity division', value))
+                            if fail:
+                                raise ValueError('custom equity division')
+                            return Weight()
+                    equity = Equity(100.) if derived else Equity()
+                    with patch.object(pa, 'scalar', side_effect=AssertionError('early shared scalar')) as scalar:
+                        try:
+                            builder(PositionTests.Position({'Z': (2., 3.), 'A': (1., 4.)}, calls),
+                                    shared, equity, schema)
+                        except Exception as error:
+                            outcomes.append((type(error), str(error)))
+                        scalar.assert_not_called()
+                    events.append(calls)
+                self.assertEqual(len(outcomes), 2)
+                self.assertEqual(*outcomes)
+                self.assertEqual(*events)
+                self.assertIs(outcomes[0][0], ValueError if fail else pa.ArrowInvalid)
+
+    def test_exact_equity_types_preserve_outputs(self):
+        import numpy as np
+        schema, shared = position_schema_and_shared()
+        for kind in (float, int, np.float16, np.float32, np.float64):
+            for value in (100, 0, -1):
+                with self.subTest(kind=kind, value=value):
+                    self.compare(schema, shared, equity=kind(value))
+
+    def test_builtin_conversion_errors_keep_original_order_and_getter_counts(self):
+        import numpy as np
+        import pyarrow as pa
+        schema, shared = position_schema_and_shared()
+        for fields in ({**shared, 'cash': 2 ** 100},
+                       {**shared, 'datetime': np.datetime64('2025-01-02', 'D')},
+                       {**shared, 'stale_mark_symbols': '\ud800'},
+                       {**shared, 'cash': 2 ** 100, 'stale_mark_symbols': '\ud800'}):
+            outcomes, events = [], []
+            for builder in (position_column_reference, position_table):
+                calls = []
+                try:
+                    table = builder(PositionTests.Position({'Z': (2., 3.), 'A': (1., 4.)}, calls), fields, 100., schema)
+                    outcomes.append(table)
+                except Exception as error:
+                    outcomes.append((type(error), str(error)))
+                events.append(calls)
+            self.assertEqual(*events)
+            if isinstance(outcomes[0], tuple):
+                self.assertEqual(*outcomes)
+            else:
+                assert_position_tables(self, *outcomes)
+
+    def test_unsupported_schema_scalar_and_custom_getter_failure_fallback(self):
+        from datetime import datetime, timezone
+        import pyarrow as pa
+        schema, shared = position_schema_and_shared()
+        for fields, current in (({**shared, 'cash': pa.scalar(1.)}, schema),
+                                ({**shared, 'cash': 7}, schema.set(schema.get_field_index('cash'), pa.field('cash', pa.int64()))),
+                                ({**shared, 'datetime': datetime(2025, 1, 2, tzinfo=timezone.utc)}, schema)):
+            with patch.object(pa, 'scalar', side_effect=AssertionError('unsupported conversion')):
+                self.compare(current, fields)
+        for builder in (position_column_reference, position_table):
+            calls = []
+            class FailFloat:
+                def __float__(self):
+                    calls.append('amount float')
+                    raise ValueError('amount failure')
+            with self.assertRaisesRegex(ValueError, 'amount failure'):
+                builder(PositionTests.Position({'Z': (1., 2.), 'A': (FailFloat(), 3.)}, calls), shared, 100., schema)
+            self.assertEqual(calls, [('stock_list',), ('amount', 'A'), 'amount float'])
 
 
 @unittest.skipUnless(os.environ.get(CHILD) == "1", "requires verified signed child")

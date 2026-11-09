@@ -22,7 +22,7 @@ class Panel:
     dataset: Path
     manifest: dict[str, Any]
     identity: dict[str, Any]
-    dates: Any  # numpy datetime64[D], ascending
+    dates: Any  # numpy datetime64[D], ascending; the snapshot's calendar, or the window load_panel was bounded to
     symbols: list[str]
     fields: dict[str, Any] = field(default_factory=dict)  # name -> float32 (dates, symbols)
 
@@ -47,8 +47,18 @@ def available_fields(manifest: dict[str, Any]) -> list[str]:
 
 
 def load_panel(dataset: Path, fields: Sequence[str] = ("open", "high", "low", "close", "volume"),
-               symbols: Sequence[str] | None = None) -> Panel:
-    """Verify ``dataset`` and return the requested fields for all (or the given) instruments."""
+               symbols: Sequence[str] | None = None, *, start_date: str | None = None,
+               end_date: str | None = None) -> Panel:
+    """Verify ``dataset`` and return the requested fields for all (or the given) instruments.
+
+    ``start_date`` and ``end_date`` (ISO dates, inclusive) bound the sessions that are read. The
+    returned calendar runs from the first session at or after ``start_date`` to the last session at
+    or before ``end_date``, and bars outside that window are never deserialized: a plain snapshot
+    reads only the bytes of the bounded rows of each instrument's bin file, a packed snapshot copies
+    only those rows out of its verified archive. Research code relies on this to keep a reserved
+    period out of a process altogether rather than slicing it away after loading. A bound beyond
+    the calendar is clipped; a window without a session is an error.
+    """
     import numpy as np
 
     from qlib_yahoo.dataset_integrity import verify_dataset
@@ -62,7 +72,12 @@ def load_panel(dataset: Path, fields: Sequence[str] = ("open", "high", "low", "c
     identity = verify_dataset(dataset, manifest)
     qlib = dataset / "qlib_data"
     calendar = (qlib / "calendars" / "day.txt").read_text(encoding="utf-8").split()
-    dates = np.asarray(calendar, dtype="datetime64[D]")
+    full = np.asarray(calendar, dtype="datetime64[D]")
+    first_row = int(np.searchsorted(full, np.datetime64(start_date, "D"))) if start_date else 0
+    last_row = int(np.searchsorted(full, np.datetime64(end_date, "D"), side="right")) if end_date else len(full)
+    if last_row <= first_row:
+        raise DatasetError(f"no session between {start_date or 'the first session'} and {end_date or 'the last session'}")
+    dates = full[first_row:last_row]
     listed = [line.split("\t", 1)[0] for line in (qlib / "instruments" / "all.txt").read_text(encoding="utf-8").splitlines() if line]
     chosen = listed if symbols is None else [s for s in symbols if s in set(listed)]
     if symbols is not None and len(chosen) != len(set(symbols)):
@@ -74,25 +89,40 @@ def load_panel(dataset: Path, fields: Sequence[str] = ("open", "high", "low", "c
 
         entries = verified_entries(dataset, manifest["storage"]["archive_sha256"])
 
-    def read(symbol: str, name: str) -> Any:
+    def window(symbol: str, name: str, first: int, count: int) -> tuple[int, int]:
+        """Rows [lo, hi) of the calendar where this instrument's bars and the requested window meet."""
+        if first < 0 or first + count > len(full):
+            raise DatasetError(f"{symbol}/{name} extends beyond the calendar")
+        return max(first, first_row), min(first + count, last_row)
+
+    def read(symbol: str, name: str) -> tuple[int, Any] | None:
+        """(first calendar row, bars) of the instrument inside the window, or None when it has none there."""
         relative = f"features/{symbol.lower()}/{name}.day.bin"
         if entries is not None:
             data = entries.get(relative)
-            return None if data is None else np.frombuffer(data, dtype="<f4")
+            if data is None or len(data) < 8:
+                return None
+            payload = np.frombuffer(data, dtype="<f4")  # a view of the verified bytes, nothing copied yet
+            first = int(payload[0])
+            lo, hi = window(symbol, name, first, len(payload) - 1)
+            return None if hi <= lo else (lo, payload[1 + lo - first:1 + hi - first])
         path = qlib / relative
-        return np.fromfile(path, dtype="<f4") if path.is_file() else None
+        if not path.is_file() or path.stat().st_size < 8:
+            return None
+        first = int(np.fromfile(path, dtype="<f4", count=1)[0])
+        lo, hi = window(symbol, name, first, path.stat().st_size // 4 - 1)
+        if hi <= lo:
+            return None
+        return lo, np.fromfile(path, dtype="<f4", count=hi - lo, offset=4 * (1 + lo - first))
 
     arrays = {name: np.full((len(dates), len(chosen)), np.nan, dtype=np.float32) for name in fields}
     for column, symbol in enumerate(chosen):
         for name in fields:
-            payload = read(symbol, name)
-            if payload is None or len(payload) < 2:
+            bars = read(symbol, name)
+            if bars is None:
                 continue
-            first = int(payload[0])
-            values = payload[1:]
-            if first < 0 or first + len(values) > len(dates):
-                raise DatasetError(f"{symbol}/{name} extends beyond the calendar")
-            arrays[name][first:first + len(values), column] = values
+            lo, values = bars
+            arrays[name][lo - first_row:lo - first_row + len(values), column] = values
     return Panel(dataset=dataset, manifest=manifest, identity=identity, dates=dates, symbols=list(chosen), fields=arrays)
 
 

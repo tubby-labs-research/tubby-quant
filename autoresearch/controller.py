@@ -14,7 +14,7 @@ from pathlib import Path
 from .config import default_research_root, default_runtime_root, validate_config
 from .discovery import discover
 from .models import make_model
-from .policy import assess
+from .policy import assess, assess_final
 from .records import ResearchStore, canonical_expression, stable_id
 from qlib_yahoo.alphalab.fastexpr import ExpressionError
 
@@ -139,6 +139,9 @@ class Controller:
         content["depth"] = depth
         if parent:
             content["parent_experiment_id"] = parent["id"]
+        if self.state.get("holdout_accessed"):
+            # Selection after a holdout access is no longer untouched by it.
+            content["post_holdout"] = True
         expression = content.get("expression", "")
         try:
             key = self._key(expression)
@@ -323,6 +326,97 @@ class Controller:
         with self.store.lock():
             self._load()
             return {**self.state, "queued": len(self.state["queue"])}
+
+    # ------------------------------------------------------------- final evaluation
+    def _campaign_experiment(self, experiment_id):
+        experiment = self.store.get("experiments", experiment_id)
+        if experiment is None or experiment.get("campaign_id") != self.campaign_id:
+            return None
+        return experiment
+
+    def _promoted(self):
+        """Latest promoted experiment per hypothesis, in review order, for this campaign."""
+        reviews = sorted(self.store.list("reviews"), key=lambda r: (str(r.get("created_at", "")), r["id"]))
+        chosen = {}
+        for review in reviews:
+            if review.get("decision") != "promote":
+                continue
+            experiment = self._campaign_experiment(review.get("experiment_id", ""))
+            if experiment is not None and experiment["result"].get("status") == "ok":
+                chosen[review["hypothesis_id"]] = experiment
+        return [(hypothesis_id, experiment, "promoted") for hypothesis_id, experiment in chosen.items()]
+
+    def _latest_successful(self, hypothesis_id):
+        experiments = [e for e in self.store.list("experiments")
+                       if e.get("hypothesis_id") == hypothesis_id and e.get("campaign_id") == self.campaign_id
+                       and isinstance(e.get("result"), dict) and e["result"].get("status") == "ok"]
+        if not experiments:
+            raise ValueError(f"hypothesis {hypothesis_id} has no successful evaluation in this campaign")
+        return max(experiments, key=lambda e: (str(e.get("created_at", "")), e["id"]))
+
+    def finalize(self, hypothesis_ids=None, *, allow_reuse=False):
+        """Score selected hypotheses once on the reserved holdout and record immutable finals.
+
+        Default selection: hypotheses whose latest review promoted them. Each
+        expression's holdout access is reserved in the checkpoint before the
+        evaluation runs, so an interrupted run still counts. A second access of
+        the same expression is refused unless ``allow_reuse`` is set, in which
+        case it is recorded with its access sequence and labelled ``reused``;
+        the policy never confirms a reused holdout. Afterwards every new
+        hypothesis in this campaign is labelled ``post_holdout``.
+        """
+        if not hasattr(self.backend, "evaluate_holdout"):
+            raise ValueError("the configured backend has no holdout evaluation")
+        with self.store.lock():
+            self._load()
+            if self.backend.identity() != self.backend_identity:
+                raise RuntimeError("dataset or engine changed; restart to create a newly identified campaign")
+            if hypothesis_ids is None:
+                selected = self._promoted()
+            else:
+                selected = []
+                for hypothesis_id in hypothesis_ids:
+                    if self.store.get("hypotheses", hypothesis_id) is None:
+                        raise ValueError(f"unknown hypothesis {hypothesis_id}")
+                    selected.append((hypothesis_id, self._latest_successful(hypothesis_id), "explicit"))
+            access = self.state.setdefault("holdout_access", {})
+            for _hypothesis_id, experiment, _selection in selected:
+                if access.get(experiment["experiment_key"], 0) and not allow_reuse:
+                    raise ValueError("holdout already evaluated for " + _hypothesis_id
+                                     + "; repeated access must be requested explicitly and is labelled reused")
+            outcomes = []
+            for hypothesis_id, experiment, selection in selected:
+                hypothesis = self.store.get("hypotheses", hypothesis_id)
+                key = experiment["experiment_key"]
+                sequence = access.get(key, 0) + 1
+                access[key] = sequence
+                self.state["holdout_accessed"] = True
+                self._event("holdout_access", hypothesis_id=hypothesis_id, experiment_id=experiment["id"],
+                            access_sequence=sequence)
+                self._save()  # reserve before the evaluation: an interruption still consumed the access
+                try:
+                    result = self.backend.evaluate_holdout(hypothesis["expression"])
+                except Exception as error:
+                    result = {"status": "error", "error_kind": "execution", "error": type(error).__name__}
+                result = {**result, "reused": sequence > 1, "access_sequence": sequence}
+                verdict = assess_final(result, self.config.get("policy", {}))
+                record = {"id": stable_id("final", {"campaign": self.campaign_id, "key": key, "sequence": sequence}),
+                          "campaign_id": self.campaign_id, "hypothesis_id": hypothesis_id,
+                          "experiment_id": experiment["id"], "experiment_key": key,
+                          "expression": hypothesis["expression"], "selection": selection,
+                          "access_sequence": sequence, "reused": sequence > 1,
+                          "backend_identity": self.backend_identity, "result": result,
+                          "decision": verdict["decision"], "reason": verdict["reason"], "created_at": utc_now()}
+                stored = self.store.put("finals", record)
+                self._event("finalized", hypothesis_id=hypothesis_id, final_id=stored["id"],
+                            decision=stored["decision"], reused=stored["reused"])
+                outcomes.append({"final_id": stored["id"], "hypothesis_id": hypothesis_id,
+                                 "experiment_id": experiment["id"], "selection": selection,
+                                 "decision": stored["decision"], "reason": stored["reason"],
+                                 "reused": stored["reused"], "access_sequence": sequence,
+                                 "holdout": (result.get("metrics") or {}).get("holdout", {})})
+            self._save()
+            return outcomes
 
 
 class BudgetReached(RuntimeError):

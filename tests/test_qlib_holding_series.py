@@ -185,10 +185,9 @@ class SignedHoldingSeriesTests(unittest.TestCase):
             positions = base.copy()
             positions.loc[0, "instrument"] = symbol
             cases.append((positions, self.frame))
-        for dtype in ("category", "string"):
-            positions = base.copy()
-            positions["instrument"] = positions["instrument"].astype(dtype)
-            cases.append((positions, self.frame))
+        positions = base.copy()
+        positions["instrument"] = positions["instrument"].astype("category")
+        cases.append((positions, self.frame))
         for date in (pd.NaT, pd.Timestamp("2030-01-01")):
             cases.append((self.positions([(date, "AAA", 1.)]), self.frame))
         positions = base.copy()
@@ -197,15 +196,28 @@ class SignedHoldingSeriesTests(unittest.TestCase):
         positions = base.copy()
         positions["datetime"] = positions["datetime"].dt.tz_localize("UTC")
         cases.append((positions, self.frame))
-        positions = base.copy()
-        positions["datetime"] = positions["datetime"].astype("datetime64[us]")
-        cases.append((positions, self.frame))
         cases.append((pd.concat([base, base[["value"]]], axis=1), self.frame))
         cases.append((base.drop(columns="value"), self.frame))
         cases.append((base, self.frame.drop(columns="account")))
         for number, (positions, frame) in enumerate(cases):
             with self.subTest(case=number):
                 self.assertIsNone(signed_holding_series(positions, frame))
+
+    def test_string_dtype_symbols_and_other_datetime_resolutions_are_native_equal(self):
+        """pandas 3 infers str symbols and microsecond dates by default; both take the fast path."""
+        rows = [(self.dates[0], "AAA", 1.), (self.dates[1], "BBB", -2.), (self.dates[5], "AAA", 3.), (self.dates[6], None, 4.)]
+        positions = self.positions(rows)
+        positions["instrument"] = positions["instrument"].astype("string")
+        self.assert_paired(positions, self.frame)
+        for unit in ("us", "s"):
+            with self.subTest(unit=unit):
+                positions = self.positions(rows)
+                positions["datetime"] = positions["datetime"].astype(f"datetime64[{unit}]")
+                self.assert_paired(positions, self.frame)
+                frame = self.frame.copy()
+                frame.index = frame.index.as_unit(unit)
+                self.assert_paired(self.positions(rows), frame)
+                self.assert_paired(positions, frame)
 
     def test_seeded_sparse_fixtures_preserve_rank_and_other_bits(self):
         rng = np.random.default_rng(717)

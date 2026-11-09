@@ -135,6 +135,7 @@ def main(argv: list[str] | None = None) -> int:
         pass
     finally:
         service.research.close()
+        service.lab.close()
         if service.busy():
             # Worker tasks stop on cancel; an in-process report cannot be interrupted, so let it finish.
             patience = 600 if getattr(service.current, "kind", "") == "report" else 10

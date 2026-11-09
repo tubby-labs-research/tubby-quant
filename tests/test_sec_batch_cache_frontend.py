@@ -81,7 +81,7 @@ class BatchCacheFrontendTests(unittest.TestCase):
         self.assertIn("0 results · 0 reused · 0 computed", result["empty"])
 
     def test_ui_version_is_preserved(self):
-        self.assertEqual(self.js("return UI_VERSION;"), "workbench-cleanup-2026-10-14")
+        self.assertEqual(self.js("return UI_VERSION;"), "console-2026-11-07.2")
 
 
 @unittest.skipUnless(importlib.util.find_spec("numpy"), "optional Lab runtime")

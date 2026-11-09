@@ -3,7 +3,8 @@
 const researchUI = { overview: null, detail: null, selected: null, configId: null, tab: "ideas", idea: null,
   timer: null, refreshing: false, editing: false, datasets: [], submitting: false, filter: "all", followWorker: false, revision: 0, refreshAgain: false,
   test: null, series: new Map(), seriesPending: new Set(), seriesBinding: null, checkingAgent: false };
-const researchLabels = { promote: "Explore further", refine: "Refine", reject: "Rejected", park: "Parked", repair: "Repair", pending: "Pending" };
+const researchLabels = { promote: "Explore further", refine: "Refine", reject: "Rejected", park: "Parked", repair: "Repair", pending: "Pending",
+  confirmed: "Confirmed on holdout", not_confirmed: "Not confirmed", insufficient: "Holdout too short" };
 function researchTag(value) {
   return el("span", { class: `tag ar-decision ar-${value || "pending"}`, text: researchLabels[value] || value || "Pending" });
 }
@@ -52,7 +53,8 @@ function initializeResearch() {
       researchField("Reserved holdout starts", "holdout", { type: "date" }),
       el("div", { class: "ar-field-pair" }, researchField("Cost (basis points)", "cost", { type: "number", min: 0, step: 0.1, value: 5, required: true }), researchField("Minimum Sharpe", "sharpe", { type: "number", step: 0.05, value: 1.75, required: true })),
       el("label", { class: "ar-field" }, el("span", { text: "Research agent" }), el("select", { id: "ar-provider", onchange: () => { $("#ar-consent").checked = false; researchProviderChanged(); } },
-        el("option", { value: "reviewed", text: "Reviewed source-backed ideas" }), el("option", { value: "anthropic", text: "Anthropic · direct model" }))),
+        el("option", { value: "reviewed", text: "Reviewed source-backed ideas" }), el("option", { value: "anthropic", text: "Anthropic · direct model" }),
+        el("option", { value: "openai", text: "OpenAI-compatible · direct model" }))),
       researchField("Model ID", "model", { maxlength: 200, placeholder: "Your configured model ID" }),
       el("div", { class: "ar-connection" }, el("div", { id: "ar-agent-identity", class: "ar-agent-identity" }),
         el("div", { id: "ar-credential", class: "ar-note", role: "status" }),
@@ -173,7 +175,7 @@ async function populateResearchConfig(cfg, revision = researchUI.revision) {
   const d = researchUI.datasets.find((row) => row.path === b.dataset || row.name === b.dataset);
   $("#ar-dataset").value = d ? d.path : ""; researchDatasetChanged(); $("#ar-universe").value = b.universe || "";
   $("#ar-focus").value = m.research_focus || "";
-  updateResearchAgents(m.provider === "agent" ? `agent:${m.agent_id}` : m.provider === "fixture" || m.provider === "reviewed" ? "reviewed" : "anthropic");
+  updateResearchAgents(m.provider === "agent" ? `agent:${m.agent_id}` : m.provider === "fixture" || m.provider === "reviewed" ? "reviewed" : m.provider === "openai" ? "openai" : "anthropic");
   if ($("#ar-provider").value === "reviewed") $("#ar-reviewed").value = JSON.stringify({ sources: cfg.discovery.fixture_sources || [], hypotheses: m.hypotheses || [], refinements: m.refinements || [] }, null, 2);
   $("#ar-consent").checked = false; researchProviderChanged(); $("#ar-form-error").textContent = "";
   researchUI.savedSetup = researchSetupIdentity();
@@ -188,7 +190,7 @@ async function saveResearchCampaign() {
     researchUI.submitting = true; $("#ar-save").disabled = true;
     const cfg = { name: read("name"), backend: { dataset: read("dataset"), universe: read("universe"), development_start: read("dev-start"), development_end: read("dev-end"),
       validation_start: read("val-start"), validation_end: read("val-end"), holdout_start: read("holdout"), cost_bps: num("cost"), warmup: num("warmup") },
-      model: { provider: reviewed ? "reviewed" : agent ? "agent" : "anthropic", model: reviewed ? "session-reviewed" : agent && connection ? connection.model : read("model"), research_focus: $("#ar-focus").value.trim() },
+      model: { provider: reviewed ? "reviewed" : agent ? "agent" : read("provider"), model: reviewed ? "session-reviewed" : agent && connection ? connection.model : read("model"), research_focus: $("#ar-focus").value.trim() },
       discovery: { arxiv_queries: read("queries").split("\n").filter(Boolean), max_results: 6 },
       policy: { min_validation_days: num("days"), min_sharpe: num("sharpe"), max_drawdown: num("drawdown"), max_turnover: num("turnover"), min_refinement_improvement: num("improvement") },
       limits: { max_experiments: num("evaluations"), max_hypotheses: num("evaluations"), max_per_family: num("family"), max_refinement_depth: num("depth"), max_model_calls: num("calls"), daily_model_calls: num("daily"), max_job_errors: 2 } };
@@ -308,6 +310,8 @@ function renderResearch() {
       el("p", { text: c && c.demo ? "Artificial demo · prepared ideas and synthetic prices, real test engine" : c && c.reviewed ? "Reviewed source-backed ideas · local market data · automatic testing and review" : "Research a mechanism. Test its expression. Keep the evidence." }),
       c ? el("div", { class: "ar-detail-meta", text: `${c.provider_name || c.provider || "Reviewed plan"} · ${c.model_id || "prepared ideas"}${c.agent_id ? " · " + c.agent_id : ""}` }) : null),
     el("div", { class: "ar-head-actions" }, w && w.running ? researchTag(w.phase || w.status) : null,
+      c ? researchFinalizeButton(d, w) : null,
+      c ? researchButton("Send promoted to Alpha Lab", () => exportResearchBatch("promote"), "small") : null,
       c ? researchButton("Export snapshot", exportResearch, "small") : researchButton("Try demo", runResearchDemo, "small")),
     el("div", { class: "ar-composer" }, el("label", { for: "ar-focus", text: "Research question" }),
       el("textarea", { id: "ar-focus", rows: 2, maxlength: 2000, placeholder: "Which daily price and volume mechanism should we investigate?", disabled: researchUI.submitting, value: focus,
@@ -320,7 +324,8 @@ function renderResearch() {
   const active = /discover/.test(phase) ? 0 : /evaluat/.test(phase) ? 2 : /review/.test(phase) ? 3 : /refin/.test(phase) ? 4 : phase === "starting" ? 0 : -1;
   setChildren($("#ar-workflow"), ...phases.map((name, i) => el("div", { class: `ar-stage${i === active ? " current" : ""}` }, el("span", { class: "ar-stage-number", text: i + 1 }), el("span", { text: name }))));
   const counts = c ? c.counts : {}, checkpoint = d ? d.checkpoint : {}, limits = c ? c.limits : {};
-  setChildren($("#ar-budget"), ...[["Sources", counts.sources || 0], ["Ideas", counts.hypotheses || 0], ["Evaluations", `${checkpoint.evaluations || counts.experiments || 0} / ${limits.max_experiments || "—"}`], [c && (c.reviewed || c.demo) ? "Plan steps" : "Model calls", `${checkpoint.model_calls || 0} / ${limits.max_model_calls || "—"}`]].map(([name, value]) => el("div", { class: "ar-stat" }, el("span", { text: name }), el("strong", { text: value }))));
+  setChildren($("#ar-budget"), ...[["Sources", counts.sources || 0], ["Ideas", counts.hypotheses || 0], ["Evaluations", `${checkpoint.evaluations || counts.experiments || 0} / ${limits.max_experiments || "—"}`], [c && (c.reviewed || c.demo) ? "Plan steps" : "Model calls", `${checkpoint.model_calls || 0} / ${limits.max_model_calls || "—"}`],
+    [d && d.holdout ? `Holdout · ${d.holdout.reserved ? (d.holdout.accessed ? "accessed" : "reserved") : "none"}` : "Holdout", d && d.holdout ? `${counts.finals || 0} finals` : "—"]].map(([name, value]) => el("div", { class: "ar-stat" }, el("span", { text: name }), el("strong", { text: value }))));
   updateResearchSetupAvailability(w);
   renderResearchConnection();
   renderResearchContent(); renderResearchToolbar();
@@ -352,6 +357,7 @@ function renderResearchContent() {
   if (researchUI.tab === "activity") {
     const rows = [...d.experiments.map((e) => ({ created_at: e.created_at, title: "Evaluated expression", text: `${e.expression} · ${e.result.status}` })),
       ...d.reviews.map((r) => ({ created_at: r.created_at, title: researchLabels[r.decision] || r.decision, text: r.reason })),
+      ...(d.finals || []).map((f) => ({ created_at: f.created_at, title: `Holdout final · ${researchLabels[f.decision] || f.decision}${f.reused ? " · reused" : ""}`, text: `${f.expression} · ${f.reason}` })),
       ...d.events.map((e) => ({ created_at: e.created_at, title: (e.kind || "Event").replaceAll("_", " "), text: e.reason || e.message || e.hypothesis_id || "Saved to research history" }))].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
     const w = researchUI.overview.worker;
     setChildren(node, el("div", { class: "ar-card" }, el("h3", { text: "Execution history" }), ...rows.map((r) => el("div", { class: "ar-activity" }, el("span", { class: "ar-activity-dot" }),
@@ -367,12 +373,14 @@ function renderResearchContent() {
   const visible = ideas.filter((h) => researchUI.filter === "all" || (h.latest_review || {}).decision === researchUI.filter);
   const toolbar = el("div", { class: "ar-table-toolbar" }, el("b", { text: `${ideas.length} research ideas` }), el("select", { "aria-label": "Filter research decisions", value: researchUI.filter, onchange: (e) => { researchUI.filter = e.target.value; renderResearchContent(); } },
     ...[["all", "All decisions"], ["promote", "Explore further"], ["refine", "Refine"], ["reject", "Rejected"], ["park", "Parked"], ["repair", "Repair"]].map(([value, text]) => el("option", { value, selected: value === researchUI.filter, text }))));
-  const table = el("table", { class: "ar-table" }, el("thead", {}, el("tr", {}, ...["Idea / expression", "Dev. Sharpe", "Val. Sharpe", "Val. annual return", "Decision"].map((text) => el("th", { text })))),
+  const table = el("table", { class: "ar-table" }, el("thead", {}, el("tr", {}, ...["Idea / expression", "Dev. Sharpe", "Val. Sharpe", "Val. annual return", "Decision", "Holdout"].map((text) => el("th", { text })))),
     el("tbody", {}, ...visible.map((h) => {
       const metrics = (h.result || {}).metrics || {}, val = metrics.validation || {};
       const button = el("button", { class: "ar-idea-link", onclick: () => { researchUI.idea = h.id; renderResearchContent(); } }, el("b", { text: h.title }), el("code", { text: h.expression }));
+      const final = h.final ? `${researchLabels[h.final.decision] || h.final.decision}${h.final.reused ? " · reused" : ""}` : "—";
       return el("tr", { class: h.id === researchUI.idea ? "selected" : "" }, el("td", {}, button), el("td", { class: "mono", text: fmt.num((metrics.development || {}).sharpe) }),
-        el("td", { class: "mono", text: fmt.num(val.sharpe) }), el("td", { class: "mono", text: fmt.signedPct(val.returns) }), el("td", {}, researchTag((h.latest_review || {}).decision)));
+        el("td", { class: "mono", text: fmt.num(val.sharpe) }), el("td", { class: "mono", text: fmt.signedPct(val.returns) }), el("td", {}, researchTag((h.latest_review || {}).decision)),
+        el("td", { class: h.final ? `ar-final ar-${h.final.decision}` : "", text: final }));
     })));
   const h = visible.find((row) => row.id === researchUI.idea) || visible[0];
   setChildren(node, toolbar, visible.length ? el("div", { class: "ar-table-wrap" }, table) : researchNote(ideas.length ? "No ideas match this decision." : "Discovery and expression generation are in progress."),
@@ -400,8 +408,9 @@ function renderResearchIdea(h) {
         ...tests.map((row, i) => el("option", { value: row.id, selected: row.id === test.id,
           text: `Test ${i + 1} · ${(row.result || {}).status || "pending"} · ${row.id.slice(-12)}` })))) : null,
     el("table", { class: "ar-table ar-metrics" }, el("thead", {}, el("tr", {}, ...["Period", "Sessions", "Sharpe", "Annual return*", "Drawdown*", "Turnover"].map((text) => el("th", { text })))),
-      el("tbody", {}, ...["development", "validation"].map((p) => { const m = metrics[p] || {}; return el("tr", {}, el("td", { text: p }), el("td", { text: m.days || "—" }), el("td", { text: fmt.num(m.sharpe) }), el("td", { text: fmt.signedPct(m.returns) }), el("td", { text: fmt.pct(m.drawdown) }), el("td", { text: fmt.pct(m.turnover) })); }))),
+      el("tbody", {}, ...["development", "validation", ...(h.final && h.final.result && h.final.result.metrics && h.final.result.metrics.holdout ? ["holdout"] : [])].map((p) => { const m = p === "holdout" ? h.final.result.metrics.holdout : metrics[p] || {}; return el("tr", { class: p === "holdout" ? "ar-holdout-row" : "" }, el("td", { text: p === "holdout" ? `holdout${h.final.reused ? " (reused)" : ""}` : p }), el("td", { text: m.days || "—" }), el("td", { text: fmt.num(m.sharpe) }), el("td", { text: fmt.signedPct(m.returns) }), el("td", { text: fmt.pct(m.drawdown) }), el("td", { text: fmt.pct(m.turnover) })); }))),
     researchNote("* Annualised net PnL and peak-to-trough PnL loss divided by half the fixed book size."),
+    h.final ? researchNote(`Holdout final · ${researchLabels[h.final.decision] || h.final.decision}${h.final.reused ? " · reused access " + h.final.access_sequence : ""}: ${h.final.reason}`, `ar-review ar-${h.final.decision}`) : null,
     renderResearchSeries(h, test),
     el("div", { class: "ar-section-title", text: "Evidence behind the idea" }),
     ...(h.evidence || []).map((e) => { const s = (h.sources || []).find((row) => row.id === e.source_id); return el("blockquote", {}, el("p", { text: e.quote }), el("cite", { text: s ? s.title : e.source_id })); }),
@@ -452,6 +461,41 @@ async function loadResearchSeries(campaignId, experimentId, key) {
     researchUI.seriesPending.delete(key);
     if (researchUI.selected === campaignId && researchUI.seriesBinding === key && researchUI.tab === "ideas") renderResearchContent();
   }
+}
+function researchFinalizeButton(d, w) {
+  const holdout = d.holdout || {};
+  const promoted = d.hypotheses.filter((h) => (h.latest_review || {}).decision === "promote");
+  const disabled = !!(w && w.running) || !holdout.reserved || !holdout.runtime_available || !promoted.length;
+  const button = researchButton(holdout.accessed ? "Finalize again (reuse)" : "Finalize on holdout", finalizeResearch, "small");
+  button.disabled = disabled;
+  button.title = !holdout.reserved ? "This campaign reserved no holdout." : !holdout.runtime_available ? "The campaign's runtime is not on this machine." :
+    !promoted.length ? "No promoted ideas to finalize." : holdout.accessed ? "The holdout was already accessed; a repeated access is recorded as reused and is never confirmed." :
+    "Scores every promoted idea once on the reserved holdout.";
+  return button;
+}
+async function finalizeResearch() {
+  const d = researchUI.detail; if (!d || !d.holdout || (researchUI.overview && researchUI.overview.worker.running)) return;
+  const reuse = !!d.holdout.accessed;
+  const message = reuse
+    ? "The reserved holdout of this campaign was already accessed. A repeated access is recorded with its sequence number, labelled reused, and can never be confirmed: it is further research, not an untouched final test. Continue?"
+    : `Score every promoted idea once on the reserved holdout starting ${d.holdout.start}. Each expression's access is recorded before the simulation runs and cannot be undone. Continue?`;
+  if (!window.confirm(message)) return;
+  try {
+    researchUI.revision++;
+    await api("research-finalize", { id: d.campaign.id, allow_reuse: reuse });
+    researchUI.revision++; researchUI.followWorker = true; researchUI.editing = false;
+    toast("Finalizing on the holdout", "Finals appear in the ideas table when the worker finishes.");
+    await refreshResearch();
+  } catch (e) { toast("Finalize could not start", e.message, "bad"); }
+}
+async function exportResearchBatch(decision) {
+  const d = researchUI.detail; if (!d) return;
+  try {
+    const out = await api("research-export", { id: d.campaign.id, decision });
+    if (!out.count) { toast("Nothing to hand off", decision === "promote" ? "No idea has been promoted yet." : "No idea matches this decision."); return; }
+    $("#lab-text").value = out.text; onLabInput(); setView("lab");
+    toast(`${out.count} expression${out.count === 1 ? "" : "s"} opened in Alpha Lab`, `Also saved as a batch file under the data folder. Match the dataset, dates and costs to this research before comparing results.`);
+  } catch (e) { toast("Hand-off failed", e.message, "bad"); }
 }
 function exportResearch() {
   if (!researchUI.detail) return;

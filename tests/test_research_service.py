@@ -278,3 +278,117 @@ class ResearchServiceTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ResearchFinalsAndProvidersTests(unittest.TestCase):
+    """Console integration of the sealed holdout finals, the hand-off and the openai provider."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(os.path.realpath(self.temp.name))
+        self.service = ResearchService(self.root / 'data', self.root / 'source')
+        self.addCleanup(self.service.close)
+        dataset = self.root / 'data/datasets/sample'
+        dataset.mkdir(parents=True)
+        (dataset / 'manifest.json').write_text('{}')
+        self.cfg = dict(name='OpenAI research', backend=dict(dataset='sample', universe='TOP8', cost_bps=5,
+                        development_start='2023-01-01', development_end='2023-12-31',
+                        validation_start='2024-01-01', validation_end='2024-12-31', warmup=100),
+                        model=dict(provider='openai', model='explicit-model-id', research_focus='Price changes'),
+                        discovery=dict(arxiv_queries=['all:momentum'], max_results=3), policy={}, limits={})
+
+    def wait(self, seconds=60):
+        end = time.monotonic() + seconds
+        while self.service.busy() and time.monotonic() < end:
+            time.sleep(.05)
+        self.assertFalse(self.service.busy())
+
+    def test_openai_provider_is_saved_listed_and_gated_on_server_credentials(self):
+        with patch.dict(os.environ, {}, clear=True):
+            saved = self.service.save(self.cfg)
+            self.assertEqual(saved['model']['provider'], 'openai')
+            catalog = {row['id']: row for row in self.service.agent_catalog()['agents']}
+            self.assertIn('openai', catalog)
+            self.assertFalse(catalog['openai']['ready'])
+            self.assertIn('OPENAI_API_KEY', catalog['openai']['message'])
+            overview = self.service.overview()
+            config = next(c for c in overview['configs'] if c['id'] == saved['id'])
+            self.assertFalse(config['ready'])
+            self.assertTrue(any('OPENAI_API_KEY' in issue for issue in config['issues']))
+            with self.assertRaisesRegex(ValueError, 'OPENAI_API_KEY'):
+                self.service.start({'id': saved['id'], 'allow_model': True})
+        with patch.dict(os.environ, {'QUANT_OPENAI_BASE_URL': 'http://127.0.0.1:11434/v1'}, clear=True):
+            self.assertTrue(self.service.agent_catalog()['agents'][2]['ready'])
+            self.assertEqual(self.service._resolved_model(self.cfg['model'])['base_url'], 'http://127.0.0.1:11434/v1')
+        with patch.dict(os.environ, {'QUANT_OPENAI_BASE_URL': 'http://example.com/v1'}, clear=True):
+            self.assertFalse(self.service._openai_ready())
+            with self.assertRaises(ValueError):
+                self.service.save(self.cfg)  # a non-loopback plain-HTTP endpoint is refused offline
+        with patch.dict(os.environ, {'OPENAI_API_KEY': 'example_openai_credential'}, clear=True):
+            self.assertTrue(self.service._openai_ready())
+            self.assertNotIn('example_openai_credential', json.dumps(self.service.overview()))
+        bad = copy.deepcopy(self.cfg)
+        bad['model']['base_url'] = 'http://127.0.0.1:9/v1'
+        with self.assertRaisesRegex(ValueError, 'server-side'):
+            self.service.save(bad)  # the browser never supplies endpoints
+
+    def test_finalize_and_export_through_the_console(self):
+        if not (importlib.util.find_spec('numpy') and importlib.util.find_spec('pandas')):
+            self.skipTest('Alpha Lab runtime required')
+        self.service.source_root = Path(__file__).resolve().parents[1]
+        with self.assertRaisesRegex(ValueError, 'campaign id'):
+            self.service.finalize({'id': 'nope', 'extra': 1})
+        with self.assertRaisesRegex(ValueError, 'Research campaign not found'):
+            self.service.export_batch({'id': 'campaign_missing'})
+        self.service.demo()
+        self.wait()
+        campaign = next(c for c in self.service.overview()['campaigns'] if c['demo'])
+        detail = self.service.detail(campaign['id'])
+        self.assertEqual(detail['finals'], [])
+        self.assertTrue(detail['holdout']['reserved'])
+        self.assertFalse(detail['holdout']['accessed'])
+        self.assertTrue(detail['holdout']['runtime_available'])
+        self.assertEqual(detail['campaign']['counts']['finals'], 0)
+        # The demo gate promotes nothing (Sharpe 100), so the console finalizes nothing by default ...
+        worker = self.service.finalize({'id': campaign['id']})
+        self.assertEqual(worker['phase'], 'finalizing')
+        self.assertEqual(worker['campaign_id'], campaign['id'])
+        self.wait()
+        self.assertEqual(self.service.overview()['worker']['status'], 'stopped', self.service.overview()['worker']['last_error'])
+        self.assertEqual(self.service.detail(campaign['id'])['finals'], [])
+        # ... and an explicit idea is scored once.
+        idea = detail['hypotheses'][0]['id']
+        self.service.finalize({'id': campaign['id'], 'hypothesis_ids': [idea]})
+        self.wait()
+        detail = self.service.detail(campaign['id'])
+        self.assertEqual(len(detail['finals']), 1)
+        self.assertTrue(detail['holdout']['accessed'])
+        self.assertEqual(detail['campaign']['counts']['finals'], 1)
+        row = next(h for h in detail['hypotheses'] if h['id'] == idea)
+        self.assertEqual(row['final']['id'], detail['finals'][0]['id'])
+        self.assertIn(row['final']['decision'], {'confirmed', 'not_confirmed', 'insufficient'})
+        self.assertIn('holdout', row['final']['result']['metrics'])
+        self.assertNotIn(str(self.root), json.dumps(detail))
+        # A repeated access is refused by the worker unless requested, then labelled.
+        self.service.finalize({'id': campaign['id'], 'hypothesis_ids': [idea]})
+        self.wait()
+        worker = self.service.overview()['worker']
+        self.assertEqual(worker['status'], 'error')
+        self.assertIn('already evaluated', worker['last_error'])
+        self.service.finalize({'id': campaign['id'], 'hypothesis_ids': [idea], 'allow_reuse': True})
+        self.wait()
+        finals = self.service.detail(campaign['id'])['finals']
+        self.assertEqual(len(finals), 2)
+        self.assertTrue(finals[-1]['reused'])
+        self.assertEqual(finals[-1]['decision'], 'not_confirmed')
+        exported = self.service.export_batch({'id': campaign['id'], 'decision': 'all'})
+        self.assertEqual(exported['count'], 3)
+        self.assertIn('rank(ts_delta(close, 5))', exported['text'])
+        self.assertTrue(exported['path'].startswith('[local path]/autoresearch/exports/'), exported['path'])  # cleaned for the browser
+        files = list((self.root / 'data/autoresearch/exports').glob('*.txt'))
+        self.assertEqual(len(files), 1)
+        self.assertEqual(files[0].read_text(encoding='utf-8'), exported['text'])
+        self.assertEqual(self.service.export_batch({'id': campaign['id']})['count'], 0)
+        with self.assertRaisesRegex(ValueError, 'decision'):
+            self.service.export_batch({'id': campaign['id'], 'decision': 'everything'})

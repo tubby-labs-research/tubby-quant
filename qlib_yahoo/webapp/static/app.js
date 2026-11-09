@@ -8,8 +8,8 @@ const OPERATORS = new Set(["Abs", "Sign", "Log", "Power", "Greater", "Less", "If
   "Rank", "Delta", "Slope", "WMA", "EMA", "Corr", "Cov"]);
 const DEFAULTS = { gross: "1", borrow: "0.4", topk: "50", ndrop: "5", start: "", end: "", warmup: "252", cost: "5", cash: "0" };
 const MAX_COMPARE = 6;
-const VIEWS = ["research", "lab", "data", "auto"];
-const UI_VERSION = "workbench-cleanup-2026-10-14";
+const VIEWS = ["research", "lab", "data", "auto", "evidence", "home", "discover"];
+const UI_VERSION = "console-2026-11-07.2";
 
 const state = {
   overview: null, view: "lab", mode: "signed", transform: "raw", restoring: true,
@@ -238,6 +238,7 @@ function updateSecRunButtons() {
   $("#run-2").disabled = running || !state.alphaValid;
   $("#lab-run").disabled = running || !state.labValid;
   if (state.view !== "auto") $("#run").disabled = running || !(state.view === "lab" ? state.labValid : state.alphaValid);
+  if (state.view === "evidence") workflowUpdateButtons();
 }
 function acceptSecInputs(result, engine) {
   const inputs = result.sec_inputs || result.lines?.flatMap(line => line.sec_inputs || []) || [];
@@ -570,6 +571,10 @@ async function checkAlpha() {
     box.className = `syntax ${result.ok ? "ok" : "bad"}`;
     box.textContent = `${result.ok ? "✓" : "✕"} ${result.ok ? (result.count > 1 ? `${result.count} alphas · batch` : "Valid expression") : secEditorError(result.message)}`;
     box.title = result.ok ? result.message : secEditorError(result.message);
+    if (!result.ok && /sign before a feature term/.test(result.message || "") && text.trim().startsWith("-")) {
+      box.append(" ", el("button", { class: "btn small ghost", type: "button", text: "Rewrite as -1 * (…)", title: "Qlib has no unary minus on features; this keeps the meaning",
+        onclick: () => { setAlpha(`-1 * (${text.trim().slice(1).trim()})`); persist(); } }));
+    }
     updateRunLabel();
     return result.ok === true;
   } catch (error) {
@@ -582,7 +587,7 @@ function setAlpha(text) { $("#alpha").value = text; onAlphaInput(); }
 function updateRunLabel() {
   updateSecRunButtons(); renderSecBindings();
   const many = state.view === "research" && state.alphaCount > 1;
-  $("#run-label").textContent = state.view === "auto" ? "Start research" : state.view === "lab" ? "Simulate alphas" : many ? `Validate ${state.alphaCount} alphas` : "Run validation";
+  $("#run-label").textContent = state.view === "auto" ? "Start research" : state.view === "lab" ? "Simulate alphas" : state.view === "discover" ? "Run campaign" : state.view === "home" ? "Get started" : many ? `Validate ${state.alphaCount} alphas` : "Run validation";
   $("#run-2").firstChild.textContent = many ? `Validate ${state.alphaCount} alphas` : "Run validation";
 }
 
@@ -596,15 +601,24 @@ function setView(view) {
   updateRunLabel();
   updateStatusRight();
   if (view === "data") { refreshDatasets(); showSources(); }
+  else if (view === "evidence") {
+    workflowUpdateButtons();
+    if (!state.evidenceLoading && !state.evidenceLoaded && typeof refreshWorkflow === "function") {
+      state.evidenceLoading = true;
+      Promise.resolve().then(refreshWorkflow).then(() => { state.evidenceLoaded = true; }, () => {}).finally(() => { state.evidenceLoading = false; });
+    }
+  }
   else if (view === "lab") { refreshLab(); requestAnimationFrame(() => { renderLabPeriod(); renderLabCharts(); }); }
   else if (view === "auto") { refreshResearch(); renderResearchToolbar(); }
+  else if (view === "home") { if (typeof homeRender === "function") homeRender(); }
+  else if (view === "discover") { if (typeof discoverRefresh === "function") { discoverRefresh(); discoverRender(); } }
   else {
     // A remembered run is only a path until the validation view is opened.
     const path = state.run || (state.runs[0] && state.runs[0].path);
     if (path && (!state.runDetail || state.runDetail.path !== path)) openRun(path);
     else requestAnimationFrame(() => { renderPeriod(); renderResultTab(); });
   }
-  if (view !== "auto") renderJob(state.job);
+  if (!["auto", "discover"].includes(view)) renderJob(state.job);
 }
 function setResultTab(tab) {
   state.resultTab = tab;
@@ -785,11 +799,34 @@ function datasetMetadata(row) {
   const packed = row.storage_kind === "qlib-zip-store-v1" ? "packed · recommended for faster loading" : (row.storage_kind || "storage unavailable");
   return `${row.data_role || "role unavailable"} · ${packed} · ${fields}${row.compatibility_note ? " · " + row.compatibility_note : ""}`;
 }
+/* data-* attributes written in a way that also works on the test harness's minimal nodes */
+function setDataAttribute(node, name, value) {
+  if (!node) return;
+  if (node.dataset) node.dataset[name.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = value;
+  else if (typeof node.setAttribute === "function") node.setAttribute(`data-${name}`, value);
+}
+/* Recovery notes are scoped to the view they concern (app.css hides the other line) and can be dismissed;
+   a dismissed note stays hidden for this session unless its text changes. */
+function recoveryTarget() { return state.view === "lab" ? "lab" : state.view === "research" ? "research" : null; }
+function recoveryDismissed(target, text) {
+  try { return sessionStorage.getItem(`recovery-dismissed:${target}`) === text; } catch (_) { return false; }
+}
 function renderRecovery() {
   const note = $("#recovery-note");
-  const messages = [state.recovery.lab && `Alpha Lab: ${state.recovery.lab}`, state.recovery.research && `Qlib Validation: ${state.recovery.research}`].filter(Boolean);
-  note.hidden = !messages.length;
-  setChildren(note, ...messages.map((text) => el("div", { text })), state.recoveryPrice ? el("button", {
+  const lines = [state.recovery.lab && ["lab", `Alpha Lab: ${state.recovery.lab}`], state.recovery.research && ["research", `Qlib Validation: ${state.recovery.research}`]].filter(Boolean);
+  // A dismissed line stays hidden for the session unless its text changes; each view's line is dismissed on its own.
+  const live = lines.filter(([target, text]) => !recoveryDismissed(target, text));
+  note.hidden = !live.length;
+  setDataAttribute(note, "has-lab", live.some(([target]) => target === "lab") ? "1" : "");
+  setDataAttribute(note, "has-research", live.some(([target]) => target === "research") ? "1" : "");
+  const dismiss = el("button", { class: "icon-btn notice-close", title: "Dismiss this notice for the session", "aria-label": "Dismiss this notice", onclick: () => {
+    const target = recoveryTarget();
+    const line = lines.find(([t]) => t === target);
+    if (!line) return;
+    try { sessionStorage.setItem(`recovery-dismissed:${target}`, line[1]); } catch (_) { /* storage unavailable */ }
+    renderRecovery();
+  }, text: "\u00d7" });
+  setChildren(note, el("div", { class: "notice-body" }, ...live.map(([target, text]) => el("div", { class: "notice-line", "data-target": target, text }))), state.recoveryPrice ? el("button", {
     class: "btn small", text: `Use saved backtest prices: ${datasetTitle(state.recoveryPrice)}`,
     onclick: async () => {
       const row = state.recoveryPrice;
@@ -800,7 +837,7 @@ function renderRecovery() {
         toast("Backtest prices switched", `${datasetTitle(row)}. Saved expression unchanged.`, "good");
       }
     },
-  }) : null);
+  }) : null, dismiss);
 }
 async function restorePriceSelections() {
   const s = state.settings, saved = priceRow(s.dataset), fallback = priceRow(s.price_dataset);
@@ -818,6 +855,10 @@ async function restorePriceSelections() {
   if (labSaved) await loadDataset(labSaved.path, true, "lab");
   else if (labDefault) {
     await loadDataset(labDefault.path, true, "lab");
+    // Remember the fallback so the note below is shown once, not on every launch.
+    if (state.lab.datasetPath && s.lab && typeof s.lab === "object" && s.lab.dataset !== state.lab.datasetPath) {
+      api("settings", { lab: JSON.stringify({ ...s.lab, dataset: state.lab.datasetPath }) }).catch(() => {});
+    }
     if (state.lab.dataset) state.recovery.lab = `Selected the configured trading-price default: ${datasetTitle(labDefault)}.${s.lab.dataset ? " The saved Lab dataset is unavailable or incompatible." : ""}`;
   } else state.recovery.lab = "Choose Trading prices in the toolbar. No eligible default is configured; saved expressions have been kept.";
   renderRecovery();
@@ -860,9 +901,24 @@ function updateDatasetSelection(target) {
   const id = target === "lab" ? "#tb-lab-dataset" : "#tb-dataset", d = owner.dataset;
   $(id + "-name").textContent = d ? datasetTitle(d) : "Choose prices…";
   $(id).title = d ? `${d.path}\n${datasetMetadata(d)}` : "Choose eligible trading prices (ordinary OHLCV)";
-  if (target === "lab") renderLabPeriod();
+  if (target === "lab") { fillLabUniverses(); renderLabPeriod(); }
   else { fillUniverses(); renderPeriod(); }
   updateStatusRight();
+}
+/* The Lab universe menu offers what the selected prices actually contain (plus smaller TOP-N cuts of it). */
+const LAB_UNIVERSE_SIZES = [3000, 2000, 1000, 500, 200];
+function labUniverseNames(universes) {
+  const sizes = Object.values(universes || {}).map((u) => +(u && u.size)).filter(finite);
+  const largest = sizes.length ? Math.max(...sizes) : 3000;
+  const names = new Set(Object.keys(universes || {}).map((n) => n.toUpperCase()));
+  for (const n of LAB_UNIVERSE_SIZES) if (n <= largest) names.add(`TOP${n}`);
+  return [...names].sort((a, b) => (+(b.match(/\d+/) || [0])[0]) - (+(a.match(/\d+/) || [0])[0]) || a.localeCompare(b));
+}
+function fillLabUniverses() {
+  const select = $("#lab-universe"), wanted = select.value || LAB_DEFAULTS.universe;
+  const names = labUniverseNames(state.lab.dataset && state.lab.dataset.universes);
+  setChildren(select, ...names.map((n) => el("option", { value: n, text: n })));
+  select.value = names.includes(wanted) ? wanted : names[0];
 }
 function datasetTitle(d) {
   d = { ...d, name: typeof d.name === "string" ? d.name : "Dataset" };
@@ -969,7 +1025,7 @@ async function renderDatasetDetail(path) {
       el("span", { class: `tag ${fields.includes("vwap") ? "good" : ""}`, text: fields.includes("vwap") ? "VWAP" : "No VWAP" }),
       el("span", { class: `tag ${audit.groups ? "good" : ""}`, text: audit.groups ? "Sector groups" : "No sector groups" })),
     el("div", { class: "kpis six" },
-      kpiTile("Period", `${(d.start || "").slice(0, 4)}–${(d.end || "").slice(0, 4)}`, `${d.start} → ${d.end}`),
+      kpiTile("Period", d.start && d.end ? `${String(d.start).slice(0, 4)}–${String(d.end).slice(0, 4)}` : "—", d.start && d.end ? `${d.start} → ${d.end}` : "no calendar recorded"),
       kpiTile("Sessions", fmt.int(d.sessions), "trading days"),
       kpiTile("Stocks", fmt.int(d.symbols), "ever in the universe"),
       kpiTile("Universe", u ? `top ${fmt.int(u.size)}` : "fixed", u ? `${fmt.int(u.unique_members)} names overall` : "explicit list"),
@@ -1982,6 +2038,7 @@ async function showSources() {
 }
 async function cancelJob() {
   if (researchUI.overview && researchUI.overview.worker.running) return stopResearch();
+  if (state.view === "discover" && typeof discoverUI !== "undefined" && discoverUI.worker && discoverUI.worker.running) return discoverStop();
   if (!state.job || state.job.state !== "running") return;
   try { const r = await api("cancel", {}); if (!r.cancelled) toast("This step cannot be interrupted", "It will stop when the step finishes."); }
   catch (e) { toast("Cancel failed", e.message, "bad"); }
@@ -1997,13 +2054,25 @@ function startPolling(job) {
     try {
       const update = await get("job", { id: state.job.id, since: state.jobSince });
       state.job = update; state.jobSince = update.log_index;
-      for (const line of update.log) if (!line.startsWith("▶")) consoleLine(line, /^Error|failed/i.test(line) ? "l-err" : /^Completed/.test(line) ? "l-ok" : /^(Verifying|Scoring|Simulating|Rendering|Scanning|Classifying|Loading|Ranking|Writing|Converting|Reading every|Hashing|Snapshot|Ready)/.test(line) ? "l-stage" : "");
+      for (const raw of update.log) if (!raw.startsWith("▶")) { const line = tidyLogLine(raw); consoleLine(line, /^Error|failed/i.test(line) ? "l-err" : /^Completed/.test(line) ? "l-ok" : /^(Verifying|Scoring|Simulating|Rendering|Scanning|Classifying|Loading|Ranking|Writing|Converting|Reading every|Hashing|Snapshot|Ready)/.test(line) ? "l-stage" : "");
+      }
       renderJob(update);
       if (update.state === "running") state.poll = setTimeout(tick, 350);
       else finished(update);
     } catch (e) { state.poll = setTimeout(tick, 1500); }
   };
   state.poll = setTimeout(tick, 150);
+}
+/* Worker diagnostics arrive as one JSON line; the console shows the number people read and keeps the rest out of the way. */
+function tidyLogLine(line) {
+  if (!/^Full worker elapsed/.test(line)) return line;
+  let diagnostics = null;
+  const start = line.indexOf("{");
+  if (start >= 0) { try { diagnostics = JSON.parse(line.slice(start)); } catch (_) { diagnostics = null; } }
+  const worker = diagnostics && diagnostics.diagnostics && diagnostics.diagnostics.worker || {};
+  const seconds = Number(worker.elapsed_seconds);
+  const outcome = typeof worker.outcome === "string" ? worker.outcome : "finished";
+  return Number.isFinite(seconds) && seconds >= 0 ? `Worker ${outcome} in ${seconds.toFixed(2)} s (startup excluded)` : `Worker ${outcome}`;
 }
 function consoleLine(text, cls = "") {
   const box = $("#console"), pane = box.parentElement;
@@ -2019,6 +2088,7 @@ function renderJob(job) {
   $("#run").disabled = running; $("#run-2").disabled = running; $("#import").disabled = running; $("#lab-run").disabled = running;
   updateSecRunButtons();
   $("#refresh-data").disabled = running;
+  if (state.view === "evidence") workflowUpdateButtons();
   if (researching) $("#run").disabled = true;
   $("#cancel").disabled = !(running && job.cancellable);
   $(".statusbar").classList.toggle("busy", running);
@@ -2037,8 +2107,16 @@ function renderJob(job) {
 }
 async function finished(job) {
   renderJob(job);
+  if (typeof workflowChronologyJobFinished === "function") workflowChronologyJobFinished(job);
   if (job.state === "cancelled") { toast("Task cancelled", job.label); return; }
-  if (job.state === "failed") { toast(`${{ backtest: "Backtest", "backtest-batch": "Backtests", import: "Import", alpha: "Alpha Lab", refresh: "Refresh" }[job.kind] || "Report"} failed`, job.error || "", "bad"); setBottomTab("console"); return; }
+  if (job.state === "failed") { toast(`${{ backtest: "Backtest", "backtest-batch": "Backtests", import: "Import", alpha: "Alpha Lab", refresh: "Refresh", "demo-data": "Demonstration data" }[job.kind] || "Report"} failed`, job.error || "", "bad"); setBottomTab("console"); return; }
+  if (["chronology-trial", "chronology-final"].includes(job.kind)) {
+    toast("Chronological evaluation finished", job.receipt?.access_label || job.label, "good");
+    setView("evidence");
+    await refreshWorkflow();
+    await refreshWorkflowChronology();
+    return;
+  }
   if (job.kind === "build-dictionary" || job.kind === "sec-dictionary-build" || job.kind === "sec-dictionary") {
     await searchSecDictionary(true); await Promise.all([checkAlpha(), checkLab()]); return;
   }
@@ -2063,13 +2141,14 @@ async function finished(job) {
     afterSelection();
     return;
   }
-  if (job.kind === "backtest") {
+  if (["backtest", "candidate-validation", "portfolio-validation"].includes(job.kind)) {
     toast("Backtest completed", home(job.result), "good");
     if (state.runFilter === "trash") setRunFilter("all");
     await refreshRuns();
     state.selected = [];
     afterSelection();
     await openRun(job.result);
+    if (["candidate-validation", "portfolio-validation"].includes(job.kind)) setView("research");
     if (state.resultTab === "compare" || state.resultTab === "report") setResultTab("overview");
     document.querySelector(`.run-item[data-path="${CSS.escape(job.result)}"]`)?.scrollIntoView({ block: "nearest" });
   } else if (job.kind === "import" || job.kind === "refresh") {
@@ -2077,6 +2156,13 @@ async function finished(job) {
     state.detailDataset = job.result;
     await refreshDatasets();
     await loadDataset(null, true);
+  } else if (job.kind === "demo-data") {
+    toast("Demonstration data ready", "Artificial prices for 200 fictional stocks. Alpha Lab, Validation and Discover can use them now.", "good");
+    state.detailDataset = job.result;
+    await refreshDatasets();
+    if (!state.lab.datasetPath) await loadDataset(null, true, "lab");
+    if (!state.datasetPath) await loadDataset(null, true);
+    if (typeof homeRender === "function") homeRender();
   } else if (job.kind === "report") {
     if (state.run) { const d = await get("run", { path: state.run }).catch(() => null); if (d) { state.runDetail.reports = d.reports; renderReportMenu(); } }
     openReport(job.result, "report");
@@ -2227,7 +2313,10 @@ async function runLab() {
   persist();
   try { startPolling(await api("alpha-run", labValues())); } catch (e) { toast("Cannot start Alpha Lab", e.message, "bad"); }
 }
-function runCurrent() { if (state.view === "auto") startResearchCampaign(); else if (state.view === "lab") runLab(); else runBacktest(); }
+function runCurrent() {
+  if (state.view === "evidence") runWorkflowValidation(); else if (state.view === "auto") startResearchCampaign(); else if (state.view === "lab") runLab();
+  else if (state.view === "discover") discoverRunSelected(); else if (state.view === "home") homePrimary(); else runBacktest();
+}
 let labTimer = null;
 let labCheckEpoch = 0;
 function onLabInput() {
@@ -2576,7 +2665,10 @@ function updateStatusRight() {
 function commands() {
   const list = [
     ["Run", "Run Qlib validation", "⌘R", runBacktest], ["Run", "Stop the running task", "⌘.", cancelJob],
-    ["View", "Qlib Validation", "⌘1", () => setView("research")], ["View", "Alpha Lab", "⌘2", () => setView("lab")], ["View", "Data", "⌘3", () => setView("data")], ["View", "Research", "⌘4", () => setView("auto")],
+    ["View", "Qlib Validation", "⌘1", () => setView("research")], ["View", "Alpha Lab", "⌘2", () => setView("lab")], ["Appearance", "Follow the system", "", () => setTheme("system")], ["Appearance", "Light", "", () => setTheme("light")], ["Appearance", "Dark", "", () => setTheme("dark")], ["View", "Data", "⌘3", () => setView("data")], ["View", "Research", "⌘4", () => setView("auto")],
+    ["View", "Discover · alpha discovery and machine learning", "⌘5", () => setView("discover")], ["View", "Start · guided first session", "⌘0", () => setView("home")],
+    ["Discover", "New alpha discovery campaign", "", () => discoverOpenNew("alpha")], ["Discover", "New model search", "", () => discoverOpenNew("ml")],
+    ["Discover", "Run the discovery demo", "", () => discoverRunDemo("alpha")], ["Data", "Create artificial demonstration data", "", homeCreateDemo],
     ["Run", "Simulate the Alpha Lab alphas", "", runLab],
     ["View", "Toggle bottom panel", "⌘J", () => toggleBottom()], ["View", "Toggle settings panel", "⌘I", () => toggleInspector()], ["View", "Console", "", () => { toggleBottom(true); setBottomTab("console"); }],
     ["View", "Holdings", "", () => { toggleBottom(true); setBottomTab("holdings"); }], ["View", "Universe membership", "", () => { toggleBottom(true); setBottomTab("universe"); }],
@@ -2599,7 +2691,7 @@ function commands() {
       ["Run", "Reveal run folder", "", () => api("reveal", { path: state.run }).catch((e) => toast("Cannot reveal", e.message, "bad"))]);
   }
   for (const ex of (state.overview && state.overview.examples) || []) list.push(["Example", ex.label, ex.alpha.slice(0, 36), () => setAlpha(ex.alpha)]);
-  for (const d of state.datasets.filter(priceEligible)) list.push(["Trading prices", datasetTitle(d), datasetMetadata(d), () => loadDataset(d.path, false, state.view === "lab" ? "lab" : "research")]);
+  for (const d of state.datasets.filter(priceEligible)) list.push(["Trading prices", datasetTitle(d), `${d.name ? d.name + " · " : ""}${datasetMetadata(d)}`, () => loadDataset(d.path, false, state.view === "lab" ? "lab" : "research")]);
   for (const r of state.runs.slice(0, 60)) list.push(["Run", `${r.starred ? "★ " : ""}${runTitle(r)}`, `${shortTime(r.created)} · Sharpe ${fmt.num(r.sharpe)}`, () => { setView("research"); openRun(r.path); }]);
   return list;
 }
@@ -2755,7 +2847,7 @@ function bind() {
     if (!(e.metaKey || e.ctrlKey)) return;
     const key = e.key.toLowerCase();
     const actions = { r: runCurrent, ".": cancelJob, k: openPalette, j: () => toggleBottom(), i: () => toggleInspector(), d: () => showDatasetPopover(),
-      "1": () => setView("research"), "2": () => setView("lab"), "3": () => setView("data"), "4": () => setView("auto") };
+      "1": () => setView("research"), "2": () => setView("lab"), "3": () => setView("data"), "4": () => setView("auto"), "5": () => setView("discover"), "0": () => setView("home") };
     if (actions[key]) { e.preventDefault(); actions[key](); }
   });
   let resizeTimer = null;
@@ -2764,10 +2856,14 @@ function bind() {
 }
 
 async function boot() {
+  initializeTheme();
   $("#sb-version").textContent = `UI ${UI_VERSION}`;
   bind();
   session.token = (await get("session")).token;
   initializeResearch();
+  if (typeof initializeWorkflow === "function") initializeWorkflow();
+  if (typeof initializeHome === "function") initializeHome();
+  if (typeof initializeDiscover === "function") initializeDiscover();
   const [overview, settings] = await Promise.all([get("overview"), get("settings").catch(() => ({}))]);
   state.overview = overview; state.settings = preferenceObject(settings);
   const savedSec = preferenceObject(state.settings.sec);
@@ -2804,11 +2900,47 @@ async function boot() {
   state.run = remembered ? remembered.path : null;
   // Restore tab styling without fetching or drawing a hidden validation result.
   setResultTab(state.resultTab);
-  setView("lab");
+  if (state.datasets.some(priceEligible) || typeof homeRender !== "function") setView("lab"); else setView("home");
   await Promise.all([checkAlpha(), checkLab()]);
   state.restoring = false;
   if (overview.job && overview.job.state === "running") startPolling(overview.job);
   else consoleLine(`Ready · data folder ${home(overview.data_root)}`, "l-stage");
+}
+
+/* ---------------------------------------------------------------- appearance
+   The stylesheet follows the system unless html[data-theme] pins light or dark. The choice lives in localStorage. */
+const THEME_MODES = ["system", "light", "dark"];
+function currentTheme() {
+  try { const saved = localStorage.getItem("tq-theme"); if (THEME_MODES.includes(saved)) return saved; } catch (_) { /* storage unavailable */ }
+  return "system";
+}
+function setTheme(mode) {
+  if (!THEME_MODES.includes(mode)) mode = "system";
+  try { localStorage.setItem("tq-theme", mode); } catch (_) { /* storage unavailable */ }
+  applyTheme(mode);
+  redrawForTheme();
+}
+function applyTheme(mode) {
+  mode = mode || currentTheme();
+  const root = document.documentElement;
+  if (root && root.dataset) { if (mode === "system") delete root.dataset.theme; else root.dataset.theme = mode; }
+  const button = $("#toggle-theme");
+  if (!button) return;
+  setDataAttribute(button, "mode", mode);
+  button.title = mode === "system" ? "Appearance: follows the system (click for light)" : mode === "light" ? "Appearance: light (click for dark)" : "Appearance: dark (click to follow the system)";
+  if (typeof button.setAttribute === "function") button.setAttribute("aria-label", `Appearance: ${mode === "system" ? "follows the system" : mode}. Click to change`);
+}
+function redrawForTheme() { if (state.view && typeof setView === "function") setView(state.view); }  // charts read the tokens when they draw
+function initializeTheme() {
+  applyTheme();
+  const button = $("#toggle-theme");
+  if (button) button.onclick = () => setTheme(THEME_MODES[(THEME_MODES.indexOf(currentTheme()) + 1) % THEME_MODES.length]);
+  if (typeof window.matchMedia === "function") {
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+    const follow = () => { if (currentTheme() === "system") redrawForTheme(); };
+    if (typeof media.addEventListener === "function") media.addEventListener("change", follow);
+    else if (typeof media.addListener === "function") media.addListener(follow);
+  }
 }
 
 function showBootFailure(error) {
@@ -2820,3 +2952,4 @@ function showBootFailure(error) {
   for (const id of ["#run", "#run-2", "#lab-run"]) $(id).disabled = true;
 }
 boot().catch(showBootFailure);
+

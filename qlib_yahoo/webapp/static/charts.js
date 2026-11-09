@@ -278,6 +278,38 @@ function barChart(container, cfg) {
   container.append(svg);
 }
 
+/* Horizontal bars: one row per label (labels stay readable however many there are); the container is sized to fit. */
+function hbarChart(container, cfg) {
+  container.innerHTML = "";
+  const labels = cfg.labels || [], values = cfg.values || [];
+  if (!values.filter(finite).length) { container.append(el("div", { class: "chart-empty", text: cfg.empty || "No data" })); return; }
+  const rowH = cfg.rowHeight || 21, longest = Math.max(4, ...labels.map((l) => String(l == null ? "" : l).length));
+  const pad = { l: Math.min(230, Math.max(80, Math.round(longest * 6.4) + 14)), r: 56, t: 3, b: 3 };
+  const height = pad.t + pad.b + rowH * values.length;
+  container.style.height = `${height}px`;
+  const width = Math.max(240, container.clientWidth), w = Math.max(40, width - pad.l - pad.r);
+  const pool = values.filter(finite), top = Math.max(0, ...pool), bottom = Math.min(0, ...pool);
+  const x = (v) => pad.l + ((v - bottom) / ((top - bottom) || 1)) * w;
+  const maxChars = Math.max(3, Math.floor((pad.l - 14) / 6.4));
+  const svg = svgEl("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": cfg.label || "bar chart" });
+  values.forEach((v, i) => {
+    const y = pad.t + i * rowH, bh = Math.max(6, rowH - 8), mid = y + rowH / 2 + 3.5;
+    const label = String(labels[i] == null ? "" : labels[i]);
+    const text = svgEl("text", { x: pad.l - 8, y: mid, "text-anchor": "end", class: "axis" }, label.length > maxChars ? `${label.slice(0, maxChars - 1)}…` : label);
+    text.append(svgEl("title", {}, label));
+    svg.append(text);
+    if (!finite(v)) return;
+    const x0 = Math.min(x(v), x(0)), bw = Math.max(1, Math.abs(x(v) - x(0)));
+    const r = svgEl("rect", { x: x0, y: y + (rowH - bh) / 2, width: bw, height: bh, rx: 2, fill: cfg.color ? cfg.color(v, i) : SERIES(0), class: "bar" });
+    if (cfg.tooltip) r.append(svgEl("title", {}, cfg.tooltip(i)));
+    svg.append(r);
+    svg.append(svgEl("text", { x: v >= 0 ? x0 + bw + 6 : x0 - 6, y: mid, "text-anchor": v >= 0 ? "start" : "end", class: "bar-label" }, cfg.format(v)));
+  });
+  const zero = Math.round(x(0)) + 0.5;
+  svg.append(svgEl("line", { x1: zero, x2: zero, y1: pad.t, y2: height - pad.b, class: "zero" }));
+  container.append(svg);
+}
+
 /* Diverging fill for signed values: CSS tokens --div-neg-1..5, --div-mid, --div-pos-1..5. */
 function divergingColor(v, scale) {
   if (!finite(v)) return "transparent";

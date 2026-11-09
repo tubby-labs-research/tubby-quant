@@ -1,5 +1,5 @@
 {
-  "allowlist_sha256": "dabda5308d73f9b88f7b856d641d4c1b6a52568eb54901cf1a6192f4cb27633e",
+  "allowlist_sha256": "cf0a2e3f7e743b3dcc459c8e7dfffd5106f0d1a35d6498127578e27457b76eea",
   "files": [
     {
       "executable": false,
@@ -12,8 +12,8 @@
       "executable": false,
       "origin": "overlay",
       "path": ".github/workflows/tests.yml",
-      "sha256": "3617db025fedaaf79da342cfe7897df2104ee868b1d7fbaa944a4be5fa07d3fa",
-      "size": 3222
+      "sha256": "69ec42ba1042a1b7016c55368004dc02d46e2e5818029a0572ddc168ab46679a",
+      "size": 3382
     },
     {
       "executable": false,
@@ -33,8 +33,8 @@
       "executable": false,
       "origin": "overlay",
       "path": "CONTRIBUTING.md",
-      "sha256": "6f5cb5d6375c103be56bf32612a91cb9ac3136955313d33f908bfec5b503856d",
-      "size": 2233
+      "sha256": "1c78dbafa58baed9b7a8926859466e6f19b1c5171107e5b58abb962f3b286504",
+      "size": 2577
     },
     {
       "executable": false,
@@ -54,8 +54,8 @@
       "executable": false,
       "origin": "overlay",
       "path": "README.md",
-      "sha256": "448741610cf2e8d29381f306e4780e3f25f58ba1ea31f518a644318357383d4c",
-      "size": 2685
+      "sha256": "3046aa11a4e0aeb592efb3a77ab615257c749d79f7fc2b8f4dd6acf13546e875",
+      "size": 14632
     },
     {
       "executable": false,
@@ -82,8 +82,8 @@
       "executable": false,
       "origin": "source",
       "path": "autoresearch/__main__.py",
-      "sha256": "6083cc4926ea2018eab00a9127edca1c2d22ae7d6b2d2481fe5c3bccca242d72",
-      "size": 4590
+      "sha256": "fbd29d6755588a8d196fe1a4ba131ef671e826b1f93dba3f5b15112c77b2b173",
+      "size": 6973
     },
     {
       "executable": false,
@@ -96,8 +96,8 @@
       "executable": false,
       "origin": "source",
       "path": "autoresearch/backend.py",
-      "sha256": "090ab06c76078197e4c3b31eae3962da26cfe4d265c977079b8129dcb45f2397",
-      "size": 15973
+      "sha256": "ede31409c546e06aa7985503d8bdca2dc7fc3f4e81cbe02d8cb8a6d040661da4",
+      "size": 20277
     },
     {
       "executable": false,
@@ -110,8 +110,8 @@
       "executable": false,
       "origin": "source",
       "path": "autoresearch/controller.py",
-      "sha256": "f3a02560f9a07d8125b540aab86dab3f19042f0937de4a5c64b3f504d53fad76",
-      "size": 17387
+      "sha256": "f93a0c84021c595674a8f0c69405d9bbd7cdbd74ae3218c17e8b8fa70b47be95",
+      "size": 23540
     },
     {
       "executable": false,
@@ -130,23 +130,219 @@
     {
       "executable": false,
       "origin": "source",
+      "path": "autoresearch/domains/__init__.py",
+      "sha256": "a5e87c7ff443d9aeb50c3654366e38017ec95f26e806163df8849178ecbd017f",
+      "size": 102
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/alpha/__init__.py",
+      "sha256": "10132853fa189b3532ce26934d75bcbf77640c90025360aec44203cdbb1f5add",
+      "size": 104
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/alpha/benchmark.py",
+      "sha256": "259d5986493b56c049fd0937056bffe17cdfbd83927ee697276b33f6b20f8c4f",
+      "size": 13911
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/alpha/domain.py",
+      "sha256": "c7f2ffbd95da3cc8ac717bd8deb1326df7400bc243b4e1d451f8645ac9de3445",
+      "size": 32991
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/alpha/evaluator.py",
+      "sha256": "a0e97ef22f20003ba5efaf1cbe0b3545fbd29f2dfdc55ca92bbebf4e37071222",
+      "size": 8143
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/alpha/grammar.py",
+      "sha256": "ea7e68d288c8078782206ccceadbdac13071649d9fe6649779aa47ec1305c03a",
+      "size": 20869
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/alpha/holdout.py",
+      "sha256": "d14eb95bda1169a56beb15c36c31abea33bed213f2accbc4c6e619a3823de526",
+      "size": 5039
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/alpha/null_calibration.py",
+      "sha256": "a17233749abed74accab0540e1d91a10bd219f4c3c54307a37d7cf44a9477f4a",
+      "size": 22194
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/alpha/planted.py",
+      "sha256": "4c7aff6def70ebb6d566663d0b162a7502ddd15e64545dc53efb94fa98529458",
+      "size": 14382
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/ml/__init__.py",
+      "sha256": "84f2a6fb7d2a5cc0e71dbe433222a069c8a4c44ceab00950dbcc9a87a14a6916",
+      "size": 110
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/ml/benchmark.py",
+      "sha256": "48e6ffa407959e44a1604a4ab484cc9bd4da32e7edcfa07760167e69e842315a",
+      "size": 7004
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/ml/domain.py",
+      "sha256": "d17e635936b8d2f5be143547f1db2f01967837629fa3c640c1853b7caf8e598d",
+      "size": 31225
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/ml/metrics.py",
+      "sha256": "b1beaf4d2f46d1272f78660f04fcb1ee7e803d60ae6ecc2fd29681f2d00639c9",
+      "size": 6175
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/ml/models.py",
+      "sha256": "0987db6646eac8bdf4ae1d9b7708b5943a7fdc3754d254f41f056205da1a5f68",
+      "size": 59371
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/ml/search.py",
+      "sha256": "29ad84503aac9c42be052f0f3c175c56c35a7c91811d12a738b436bb2b6c51f9",
+      "size": 7264
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/domains/ml/tasks.py",
+      "sha256": "693a8752926909652450433ccd7156d33cc336ad19cff6b1e1a809111cc116ed",
+      "size": 25325
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/handoff.py",
+      "sha256": "4851d628a3364c752c64b12b3b6b557c9be0b15e31bcdbfa154ca795120eefa1",
+      "size": 8833
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/lab/__init__.py",
+      "sha256": "4a799cc02dd1b73c1851468d2a1d185ae363c6fd30d5818a238b467f5656730e",
+      "size": 99
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/lab/campaign.py",
+      "sha256": "f172264aef8c6208a75366fc562a2891061d0d53c48f4c6308b69cc07f8c6833",
+      "size": 96899
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/lab/cli.py",
+      "sha256": "62fb78a7dbfc5120b0289fb7e4a415266a2e35593d0b227318c499694c3bfa4a",
+      "size": 15754
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/lab/domain.py",
+      "sha256": "dc75226099030c5f8aa69b2ad71cf4c533e64f27e4a0f378e04043fab0d8f2b7",
+      "size": 8298
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/lab/ledger.py",
+      "sha256": "e95249fb8441a9f3f9125f3e8a9ede1af5ed1c88e37b2111415b6b2486d9e308",
+      "size": 5443
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/lab/lineage.py",
+      "sha256": "60f230c1d2d6e355c7fc08d56fcfee496d1c6b8bb3bcf19ed444d0aa90a2a79f",
+      "size": 27166
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/lab/report.py",
+      "sha256": "3802e2386554708f9027a6551c9dbf657a0dac681047dab2ec2a6842f7db5547",
+      "size": 13064
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/lab/runtime.py",
+      "sha256": "e4d056c3b9867a7d4fd5e379fc5df2e349274904d831893df75075a96f4a41ba",
+      "size": 3471
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/lab/selection.py",
+      "sha256": "071861d2dcff4ac566659835bb41b6cbdaea9de80dbf44dc5df42a05c997967c",
+      "size": 6881
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "autoresearch/lab/types.py",
+      "sha256": "34e2aada4b7fa191fb82a1ae20d91015f87656fc930cecb109d5bc12cbe24bdc",
+      "size": 15256
+    },
+    {
+      "executable": false,
+      "origin": "source",
       "path": "autoresearch/models.py",
-      "sha256": "c67ad373f26f607b9167629ba933655108f1895b0c2a31d011da43969297cd97",
-      "size": 18661
+      "sha256": "45309df41604af9ec9bb747362534cf97f15c0c0979973f1364a9f2cfaea9029",
+      "size": 25386
     },
     {
       "executable": false,
       "origin": "source",
       "path": "autoresearch/policy.py",
-      "sha256": "a3a31992221bfed620199341188c82731007247f5b903f33820d8c15dadd4abb",
-      "size": 5405
+      "sha256": "e2cc7d7086f556f18a8a4ba03497a0d002e6bcda5c467ac833179235f4ae4421",
+      "size": 7987
     },
     {
       "executable": false,
       "origin": "source",
       "path": "autoresearch/records.py",
-      "sha256": "8e12dec987dbbcfb715c82cbb2c195451627e8629527565145cfc21f27e21d16",
-      "size": 9542
+      "sha256": "c7bf884e924995e124bd8f7b3450d9e9b73be212e65c0cd1d1e99328c2059441",
+      "size": 10283
+    },
+    {
+      "executable": false,
+      "origin": "overlay",
+      "path": "docs/ACCEPTANCE.md",
+      "sha256": "30928cbbc3bb97beaf4cfa712e7d0a9cb359da8e29540e75e837046665621a2d",
+      "size": 15523
     },
     {
       "executable": false,
@@ -165,6 +361,20 @@
     {
       "executable": false,
       "origin": "overlay",
+      "path": "docs/CONSOLE_DESIGN.md",
+      "sha256": "a765d36dfad4c19d1b51a81f8376980504a741de125e901a3218e18ebbdcfa61",
+      "size": 3783
+    },
+    {
+      "executable": false,
+      "origin": "overlay",
+      "path": "docs/CONSOLE_QUICKSTART.md",
+      "sha256": "223a87c67575bc451f71a60b18be8eb4400e68470ac5fb6927b11796d2a154ef",
+      "size": 6863
+    },
+    {
+      "executable": false,
+      "origin": "overlay",
       "path": "docs/DATA.md",
       "sha256": "70c5e2b8cccac3c225db78fb6aade767cebb5546f798633a36d0c9bdd8e20fe0",
       "size": 2966
@@ -172,9 +382,30 @@
     {
       "executable": false,
       "origin": "overlay",
+      "path": "docs/EVIDENCE.md",
+      "sha256": "c263f631da905b73b9e817d27456a0f82bf3715118b77259cf9fe050cf38be14",
+      "size": 16262
+    },
+    {
+      "executable": false,
+      "origin": "overlay",
       "path": "docs/INSTALL.md",
-      "sha256": "10effa779aa3a53f419af9662ef47e67a67b10dcd14bfa72e1a2c82eef01537e",
-      "size": 7261
+      "sha256": "91bb0f2404f743aeb1c320c13de2189cab8d3226807c33e2a6a92e97da9b40b6",
+      "size": 8171
+    },
+    {
+      "executable": false,
+      "origin": "overlay",
+      "path": "docs/LAB_BENCHMARKS.md",
+      "sha256": "9ea2fd7f4d90eaff3a9db046fa356632bdad8570d34b0e780dbe714a58fbd186",
+      "size": 4304
+    },
+    {
+      "executable": false,
+      "origin": "overlay",
+      "path": "docs/LAB_DOMAINS.md",
+      "sha256": "0fca2156ffd38012b1c387ff4e16862b933d7491025e3ca94471067531df4a77",
+      "size": 14940
     },
     {
       "executable": false,
@@ -215,15 +446,15 @@
       "executable": false,
       "origin": "overlay",
       "path": "docs/README.md",
-      "sha256": "17f9581439d46a659d7472b6b413f82a685a1630b6389d29cdc23e871ff64e45",
-      "size": 1199
+      "sha256": "7a0cc1c995524eca2e9138d8f44bba37b96c8bed7cc4247e253270ba811f318c",
+      "size": 1929
     },
     {
       "executable": false,
       "origin": "overlay",
       "path": "docs/RELEASE_NOTES.md",
-      "sha256": "ad1415ae158ed5fd44668b37e381fa37c2a27d4f0f2d886ece924b1adb26c9d0",
-      "size": 2867
+      "sha256": "99de1823232144a047d92134583ece2a2ec0259d4278f1824f758fb29159a830",
+      "size": 10064
     },
     {
       "executable": false,
@@ -243,8 +474,8 @@
       "executable": false,
       "origin": "overlay",
       "path": "docs/USER_GUIDE.md",
-      "sha256": "95bd6d5eb1ea3e9a6207adcfffa8c8cbfa131ce131bcdaf16baf0e15f6cd9ac1",
-      "size": 3878
+      "sha256": "d20dc9ecbe71cf093e2246303ce30db59851e48e9f5d4b13ce7bcf90ff631823",
+      "size": 9128
     },
     {
       "executable": false,
@@ -266,6 +497,20 @@
       "path": "docs/qlib-public-native-build.v1.json",
       "sha256": "1044637012d38359a04e498e57e81bb8d1c5fa6c51016363092e082025207672",
       "size": 3258
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "lab-alpha.example.json",
+      "sha256": "198dd1913f2213502eb1d2c92f6ce89c3d443b077acd2511934b73fd05ba1c58",
+      "size": 815
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "lab-ml.example.json",
+      "sha256": "80cabda07b23676581f8889b13c52520c9dae05e192b033eb312464ac31b3706",
+      "size": 514
     },
     {
       "executable": false,
@@ -298,16 +543,23 @@
     {
       "executable": false,
       "origin": "source",
+      "path": "pyproject.toml",
+      "sha256": "c245747f18a2c03ef558de7c4d8647b19bb96ba9b404034835acff7b173efc52",
+      "size": 3845
+    },
+    {
+      "executable": false,
+      "origin": "source",
       "path": "qlib_yahoo/__init__.py",
-      "sha256": "db419ec740098c2dec2b8b46f9c947928c2416d2f40076fb3f219f00e3f8af7e",
-      "size": 799
+      "sha256": "6fd4af82ea1f577a0103a560929945c989e85d2c60ea26b1f08f14dededfe4e7",
+      "size": 875
     },
     {
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/__main__.py",
-      "sha256": "b5342a311d2cf2c443a927d38a27ac6c16746d636f36b2b87867b0a64304bd92",
-      "size": 26413
+      "sha256": "d412c43af46fd877e490397d81821ad2c13828545a36e69259d2bd7698d08f2e",
+      "size": 26664
     },
     {
       "executable": false,
@@ -320,22 +572,22 @@
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/alphalab/batch.py",
-      "sha256": "38601711a7df6c480761be7b110dc2c27b24b5605aec0e9fe0725d896b8996e6",
-      "size": 37660
+      "sha256": "0c804d2976758ec2f449f4b51eaaed05d73c67d9195d3a9f5111c1f42b91a434",
+      "size": 42646
     },
     {
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/alphalab/cli.py",
-      "sha256": "29d52345a55fd0b36ace64fc40bbd8e5036f39f38ee4f5d395ba25eb88e1ee22",
-      "size": 10764
+      "sha256": "a0c51f88dc2e471485071ac6673a45235136e412fe0945d03fca91a0856aeb68",
+      "size": 11845
     },
     {
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/alphalab/engine.py",
-      "sha256": "5d3bc5c202df8713fef1a6262842b3ed063064df01533de4fdf8e3692c31893b",
-      "size": 17414
+      "sha256": "e120e44566479f3534884b72e566b5af5eede7c30cd8c0451b419c70246363e1",
+      "size": 17594
     },
     {
       "executable": false,
@@ -347,30 +599,37 @@
     {
       "executable": false,
       "origin": "source",
+      "path": "qlib_yahoo/alphalab/mcp.py",
+      "sha256": "2da5ebc0b7232d91930de32dd73751c3eec74dfaf9bebc49a4c4720907a6d092",
+      "size": 30521
+    },
+    {
+      "executable": false,
+      "origin": "source",
       "path": "qlib_yahoo/alphalab/ops.py",
-      "sha256": "8ee77ca0c90e5c36a09de9c356d0de953d4be819e4f3a608e92704d9f2869953",
-      "size": 19124
+      "sha256": "1f4355ac6bc0edd362f4dfa685ac24622b3b259d6d34e1eed1ea9608a04fd441",
+      "size": 21796
     },
     {
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/alphalab/panel.py",
-      "sha256": "251cafb504c73ebf83971f14453c8a18e7cd986d44fc141e3aa8ba0685a20653",
-      "size": 2319
+      "sha256": "b325be38ab75edf3fc2b439e975d981e076df1e7571d1de36d5e2e8979b30ac8",
+      "size": 2377
     },
     {
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/alphalab/settings.py",
-      "sha256": "debec6ca4b9ce206a3b6e78f0b459f4c67f15f7f6ade48f65a32ba4f22477902",
-      "size": 1834
+      "sha256": "74912bac512b54d9be4c98faf2460b35d2ca759b79cd4932012aabdb6f242f6b",
+      "size": 3458
     },
     {
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/alphalab/simulate.py",
-      "sha256": "b423414c876e6ad8fd8d091b160c2dbf384b50e5ffde899c02ca71243b27bd7e",
-      "size": 27387
+      "sha256": "0b38be3d8a89615832c898e2fa4de7accb26c00afaccae1e60b98ea2ea9f6b6f",
+      "size": 30010
     },
     {
       "executable": false,
@@ -390,8 +649,36 @@
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/backtest.py",
-      "sha256": "1bbd189c0eb26912868a9e5d5973389e61210004cf18be90ec86bb24cd9c1c11",
-      "size": 59158
+      "sha256": "8e348c07441297e08a8c3172fb836d1b7b04f5b80c356377eb6172da5c466208",
+      "size": 70074
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/candidate_workflow.py",
+      "sha256": "317015f7d14c61e6ddb39203b824a295651d3beb81fbda2b156533ed374ae280",
+      "size": 27083
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/chronology.py",
+      "sha256": "4c87eb986657032ba572de13b4c2cd53f38e6f775e3b9b7205fe658091419545",
+      "size": 41048
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/chronology_scoring.py",
+      "sha256": "2aa69379d46fd9b7c89b95a74024fe591ba33d226b4195b4022b7d39f476e2cf",
+      "size": 2725
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/chronology_workflow.py",
+      "sha256": "9e1b488a2d0ee98f55dcb8c7e2d9811c0de11334fe1e2612a506ddfb0c3df13c",
+      "size": 23674
     },
     {
       "executable": false,
@@ -434,6 +721,13 @@
       "path": "qlib_yahoo/dataset_integrity.py",
       "sha256": "c7294682ab2d490f9df1cd9ce24ec16e47808783680f1e5beab946e952ecf9d0",
       "size": 8978
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/demo_market.py",
+      "sha256": "5bcc6a3f997d2eb36fb630839636668746ff3c431849bb6d8238596a17e23f8c",
+      "size": 6245
     },
     {
       "executable": false,
@@ -502,8 +796,8 @@
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/holding_series.py",
-      "sha256": "eb15b14a34674c7196d643d6b6d40107d963f1b235ce1dafbf7dd12707089d4e",
-      "size": 3230
+      "sha256": "b3bf7583d9dd952e755849e618a64c6009b79f51a361ebbe42080d309e564c1f",
+      "size": 3805
     },
     {
       "executable": false,
@@ -516,8 +810,8 @@
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/jobs.py",
-      "sha256": "22876773e0a0a37fa3dcc069ff31efc5946c5003ad7cf10668ffa58f68598907",
-      "size": 18199
+      "sha256": "486e918e99c2fd793bc63cdc03e4fbe9452eac90e9e76a303c5e4cc4a70cc5ce",
+      "size": 22828
     },
     {
       "executable": false,
@@ -558,8 +852,8 @@
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/panel.py",
-      "sha256": "9de53a64c67ac3c7cd2cca83af70fc992a3e08c234122523d6385eee4ac77632",
-      "size": 5034
+      "sha256": "e9bb76b8f62747f20de25c0e7329caf004b41be9a2e602b2f6ffb91bfb74fe38",
+      "size": 7141
     },
     {
       "executable": false,
@@ -581,6 +875,27 @@
       "path": "qlib_yahoo/performance.py",
       "sha256": "0ff09fb15100ecd0ea230bf0da943ba20cd251e9c3f8e6879c94a4225c8d1837",
       "size": 4728
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/portfolio.py",
+      "sha256": "1c18a7f89d5a58710af334b63d966b4e07f2796ff6c7228ea5da8fa30b68cad4",
+      "size": 26637
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/portfolio_runtime.py",
+      "sha256": "b23a2636aeff73ab71efec2b81d84a2dd0ebabbc3f0da6fec9394623da01e93c",
+      "size": 19526
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/portfolio_workflow.py",
+      "sha256": "1d4834ed330daa719fbc80cf6c0fc3cfb508b7e32bc7d1ba3250e660ab87ae51",
+      "size": 17871
     },
     {
       "executable": false,
@@ -628,8 +943,8 @@
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/refresh.py",
-      "sha256": "56e45f1c2b0d6face5937cd0a4f2701b1a710dd387f5dd1bdd967cdc145bcb69",
-      "size": 4376
+      "sha256": "33afb9d516b55cb10b0a57b0562b35ef78026308c6a2aa9b3c5ed7fbdbad0ff6",
+      "size": 7513
     },
     {
       "executable": false,
@@ -789,8 +1104,15 @@
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/streaming_columns.py",
-      "sha256": "449ee4057e1eee926e2bbb92e918101489cdf719e346763ab588dc53afe09487",
-      "size": 6238
+      "sha256": "530060f7c10424f39cd1883b30c53e8f846ccd266c3ba5e457eaa69c23aaacba",
+      "size": 10255
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/target_bundle.py",
+      "sha256": "928e1346945f4deabde754ffe987442595117d5aaf2e1d78d17631e4e45bf6da",
+      "size": 13219
     },
     {
       "executable": false,
@@ -816,6 +1138,13 @@
     {
       "executable": false,
       "origin": "source",
+      "path": "qlib_yahoo/validation_workflow.py",
+      "sha256": "96abb01a8811a7e74a12efd9dd8966d9ded455f2e89f7166ddc49b8bf8379a1f",
+      "size": 6104
+    },
+    {
+      "executable": false,
+      "origin": "source",
       "path": "qlib_yahoo/webapp/__init__.py",
       "sha256": "5ed18dfe3184a50e3b24270b6c8df645aa05c9c7b9353f56fff821ec25d5e4fa",
       "size": 81
@@ -824,8 +1153,15 @@
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/webapp/__main__.py",
-      "sha256": "7f922254996e0eb003a5a32b67830a5325b9c0080b58d9146d67d5a0aba15476",
-      "size": 7844
+      "sha256": "f8f86cf3f483e0060acd2f605c29a5d9d82b4a1397b4fd71e8c72b7f3fdedf9a",
+      "size": 7872
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/webapp/lab_service.py",
+      "sha256": "28666b17053d960e2c6d4c41ca842508d5c0ef0b2b698a95379a8499c253d6a1",
+      "size": 63431
     },
     {
       "executable": false,
@@ -838,22 +1174,22 @@
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/webapp/research_service.py",
-      "sha256": "f5c81723f8e8ae1073aab942925c252464e4743324f47a0068070c1036369a30",
-      "size": 41118
+      "sha256": "ce6ab4a7243c0498f3e711fa09f6335486b0135cbe848ae619493fd3ac9fa4ca",
+      "size": 48132
     },
     {
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/webapp/server.py",
-      "sha256": "99e5e61dc3ff7b534d754efaa282e237a95f2d883ecd05729f3d97a0a5cd3fab",
-      "size": 14082
+      "sha256": "70497f3bcdb643420e0653e124646f736de1250960b379e4e53a9ae3855e6f13",
+      "size": 17106
     },
     {
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/webapp/service.py",
-      "sha256": "2fe87a5d4688d93e0d59c02a2f15c846ce84b649391bda8a63a06f620f4b6e00",
-      "size": 71868
+      "sha256": "92fcff9f50a053d27131dbb160fe855fb7efc641e223bf6c7c0573b1afaf453d",
+      "size": 84283
     },
     {
       "executable": false,
@@ -866,22 +1202,22 @@
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/webapp/static/app.css",
-      "sha256": "aff162837d9f9851b34471f478134da72703f935ed49aee4f24f8ca517c530d8",
-      "size": 54139
+      "sha256": "26f6f66a66074fbf0f290f4402ab3e180fb7eb1bfaf8a196999a2c823d9f2217",
+      "size": 62108
     },
     {
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/webapp/static/app.js",
-      "sha256": "c7423347dccbd6b4f743077d7dd8533d2f40c6ab20edaeed07601d323d941888",
-      "size": 199639
+      "sha256": "8cd62b6db60b90d5c8f9a8fe6230abed60ad4460a9ce1929e15a21030f324dac",
+      "size": 209226
     },
     {
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/webapp/static/charts.js",
-      "sha256": "fb67417882c148fbdf9638b00ed1ed11aa441c3899b10f2735fafb318acfcecc",
-      "size": 26213
+      "sha256": "2e897394a0588bb52e8d39ad1cf799a6de4a6bf1d273aef24ffb486239b3f15a",
+      "size": 28436
     },
     {
       "executable": false,
@@ -893,23 +1229,65 @@
     {
       "executable": false,
       "origin": "source",
+      "path": "qlib_yahoo/webapp/static/discover.css",
+      "sha256": "12d7ec42dcc20aa4e50a35db80602b675334c9af735b6f4bb366c5d5026baf2d",
+      "size": 15174
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/webapp/static/discover.js",
+      "sha256": "0b61524165c9f91cc099db821439db344aa26b81c960493bd7dc49d847af39ac",
+      "size": 63240
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/webapp/static/home.css",
+      "sha256": "b76261a6e3e48da0f7495693bcbf619b668e39e7230d85d8d7b4c6ff4dd44f67",
+      "size": 4675
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/webapp/static/home.js",
+      "sha256": "8202d88d1218356df5410f575fdfb95812b50c35acf37ed17782d86d51d206d5",
+      "size": 11287
+    },
+    {
+      "executable": false,
+      "origin": "source",
       "path": "qlib_yahoo/webapp/static/index.html",
-      "sha256": "86ee149e923566443deaa868df17f5978b7e7c9d5ce748745b505db996db18e4",
-      "size": 36630
+      "sha256": "ed1cd0f897994e8047f3445a784548967ecf27e37151ae85d8d822cf2826b8a0",
+      "size": 38341
     },
     {
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/webapp/static/research.css",
-      "sha256": "5e6ccb53b8e33661990c32d5dcef9a7cb49f6dcb9ed45b36d05bd9cb057f2a99",
-      "size": 10164
+      "sha256": "fa7cc9f2acf28608e51f2cce236dc18f3a733a80a9658d7e7226d4d3386c90c5",
+      "size": 11787
     },
     {
       "executable": false,
       "origin": "source",
       "path": "qlib_yahoo/webapp/static/research.js",
-      "sha256": "ff75244563e7c5f20b2f68afd4c63e7cbe5816faebaac7a9ed521e8394737424",
-      "size": 42560
+      "sha256": "bbe8de11a08c56f8246e9d9e1b58aa1a6da5596a1ce5b765ed4416a38119c3ff",
+      "size": 46728
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/webapp/static/workflow.css",
+      "sha256": "9030f72c5012bcee941ce75b804274d9f77486309e88fb79ba94afc78cc8c256",
+      "size": 4835
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/webapp/static/workflow.js",
+      "sha256": "95a7058523526a1d832ff7d11c233ad119652c2c7c6494a1b9961ff80b79dafa",
+      "size": 75687
     },
     {
       "executable": false,
@@ -917,6 +1295,41 @@
       "path": "qlib_yahoo/workbench_store.py",
       "sha256": "4b0c913ed079f23ca97d95923467de242aa06c69df912429004ea799ac34b3b3",
       "size": 8279
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/workflow_cli.py",
+      "sha256": "f8ff48e4761cb3d7eb1640d198c0de46525201662eb10938351f54fe0038a966",
+      "size": 5936
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/workflow_provenance.py",
+      "sha256": "d7127d27a18b0558b51cd6f15838ad35e1951ea9ac2eaf2e3449c4864184c33e",
+      "size": 3167
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/workflow_records.py",
+      "sha256": "a486282c038c4373f1a0b420ab92f541044db415379c6f95458741ac81efd56d",
+      "size": 19533
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/workflow_recovery.py",
+      "sha256": "7725b0e6b4481c15023bcb99122e631758cf6985bc81f42fb7c109b33285b00a",
+      "size": 1476
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "qlib_yahoo/workflow_submission.py",
+      "sha256": "2155f0cd5ab4fb12e38e0f1880d0e176777c5c3ace7a3bbb8bfe2acc7d19d89d",
+      "size": 5635
     },
     {
       "executable": false,
@@ -998,9 +1411,30 @@
     {
       "executable": false,
       "origin": "source",
+      "path": "scripts/check_static.py",
+      "sha256": "bd0d5830a20a2ffeb6e166207be283d432c19e309c5b9a474caad4d8e9719bc9",
+      "size": 3250
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "scripts/check_types.py",
+      "sha256": "c27b7de6077f33b26a6999a955ce071ab34e5cf18fb54cdd931d08c84b72040c",
+      "size": 3780
+    },
+    {
+      "executable": false,
+      "origin": "source",
       "path": "scripts/import_sec_catalog.py",
       "sha256": "ffc5eba3eede24f5afefeaf4eb75834a50d83ce17d41f895dbd9784efce9d913",
       "size": 2697
+    },
+    {
+      "executable": true,
+      "origin": "source",
+      "path": "scripts/install.sh",
+      "sha256": "52174a998cdf4397aaff8fb3bc8cf0b2fc464d30371737c8f1eacc25c82f0866",
+      "size": 4875
     },
     {
       "executable": false,
@@ -1054,6 +1488,13 @@
     {
       "executable": false,
       "origin": "source",
+      "path": "scripts/run_tests.py",
+      "sha256": "cf86c6dc7c133093b652d6104c91b96d86a58a8a114d2a130eae65f3b5974792",
+      "size": 3053
+    },
+    {
+      "executable": false,
+      "origin": "source",
       "path": "scripts/smoke_qlib_fast_runtime.py",
       "sha256": "84c2b248388037c95b72e44dcfdc456e2222d7639fad098b5e29a1604fa00114",
       "size": 9372
@@ -1099,6 +1540,13 @@
       "path": "scripts/windows/setup.ps1",
       "sha256": "f54cc71d381870eee4782704d14765defd7fb91ca5f59ea0f7d32fe33d91f411",
       "size": 5774
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/alphalab_reference.py",
+      "sha256": "0510192745eb5acb2b7eb6e5b1848f438fb778d755617ee36094446511b4ef84",
+      "size": 13847
     },
     {
       "executable": false,
@@ -1202,8 +1650,15 @@
       "executable": false,
       "origin": "source",
       "path": "tests/test_alphalab_groups.py",
-      "sha256": "f64b45caf811928d2af6ffc88010fe8c1aefeeccea0041cbfb77722058367c18",
-      "size": 10336
+      "sha256": "1b64f2318b2ad37b8fb76e1e615d485188b2d65d064aefc72cb7fe81194240b9",
+      "size": 10438
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_alphalab_mcp.py",
+      "sha256": "3c0417d43ed4d8d1af3f18575e9b56bbc2c7b4cc474d7eb728a2a8b34b2ddc9f",
+      "size": 15361
     },
     {
       "executable": false,
@@ -1211,6 +1666,20 @@
       "path": "tests/test_alphalab_neutralization.py",
       "sha256": "664ed7d61bc9c86f13d429e485391e09f7c568de9d9251e958abe354b2f703d6",
       "size": 18570
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_alphalab_operator_references.py",
+      "sha256": "d39d75eac01301e3210e335f5f7dd65e24b5b63891dd92ea50e675f1a47ce193",
+      "size": 17853
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_alphalab_reference.py",
+      "sha256": "524ad0f82eb66aa37426cff61a13cf1df66d2faa3a92b853ad3897851073e4e1",
+      "size": 11064
     },
     {
       "executable": false,
@@ -1236,9 +1705,23 @@
     {
       "executable": false,
       "origin": "source",
+      "path": "tests/test_autoresearch_final.py",
+      "sha256": "d03b3857892177c2d7efd441b518976f926102c3befa953da2288c719b311488",
+      "size": 15165
+    },
+    {
+      "executable": false,
+      "origin": "source",
       "path": "tests/test_autoresearch_models.py",
       "sha256": "4f2797fc8b84d340f000602a194669b2fb37867049df2c6631c765cfe53bee66",
       "size": 8627
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_autoresearch_openai.py",
+      "sha256": "88807a49127d5ef8621ec3612f558e3c62d64c878e2e809a1c27da9c01efa900",
+      "size": 8812
     },
     {
       "executable": false,
@@ -1257,9 +1740,177 @@
     {
       "executable": false,
       "origin": "source",
+      "path": "tests/test_candidate_workflow.py",
+      "sha256": "bd313f2958206afc8edf565d4f2036e3c9cd249f5a7f64d46fdb5607546d4217",
+      "size": 26742
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_check_static.py",
+      "sha256": "0465962c6110ab6eca882f607bc6be7ab20842789c472568640c7b65b5ba7d21",
+      "size": 2087
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_chronology.py",
+      "sha256": "1a0c1eb0c23295fb73b4ee5f794c11a7822f7c507088d66a1943ecae6ed0b2b8",
+      "size": 45139
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_chronology_entrypoints.py",
+      "sha256": "5a25c25d014421cb512471ce5a28aa594eba928aa58f5e750f1af9eae132e8ba",
+      "size": 26027
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_chronology_scoring.py",
+      "sha256": "c648b2cf557104f586d2b25ffd31a122aa1ca15e70f7f802c184ca3bb13a6d40",
+      "size": 2722
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_chronology_workflow.py",
+      "sha256": "7235e2fdf6e1564b61a7574a15b61e32e101a92e0123094a16d3e25543d42a0f",
+      "size": 25408
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_console_contrast.py",
+      "sha256": "a90b3997cf8d2b6a53e5e6c586f8d3f189df1dedf552927474a1b8d80910dac2",
+      "size": 2361
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_console_start_frontend.py",
+      "sha256": "84f160138539af00adc90bd30dbbcae6460e57f025dc843bef89e39c3c2969d9",
+      "size": 9174
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_demo_market.py",
+      "sha256": "9948e5ffcda7e513c786d1d3a0fffd37cc0f27e627a83e1e4d162a52eed167e6",
+      "size": 3474
+    },
+    {
+      "executable": false,
+      "origin": "source",
       "path": "tests/test_framework_environment.py",
       "sha256": "3230b3b77deedcae53021bbf9420adf1487fe1142974f70154b475511ee4bb88",
       "size": 8926
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_lab_alpha.py",
+      "sha256": "28de7aa4bb71b5a6716a08ee82c67e9cd7348c7cc538611e7227ab7b6626080c",
+      "size": 34164
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_lab_console.py",
+      "sha256": "da217ac0a7ea655884b260449d285adf6e2f83a001bf238d36bf8e04aeb4b92b",
+      "size": 21888
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_lab_console_messages.py",
+      "sha256": "f20875067bf7e7a3633dc13f6d38d06bcea8b2161befc7ed81598d67d89d8423",
+      "size": 2816
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_lab_harness.py",
+      "sha256": "523c5bc8e30c64fe6ddcdf8dbb1addd46f7781efe6de5240baf0e275b485128c",
+      "size": 69571
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_lab_ml.py",
+      "sha256": "1a667e5874d90d0108c7d94cc1c8f326b9d9bcbd67e5f06f5ffbdc847d3e8e7a",
+      "size": 26826
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_lab_null_calibration.py",
+      "sha256": "91c970dd3e76c2de9e77af18689b341a2a58f979513b8c1a45811baace313f90",
+      "size": 18658
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_lab_reproducibility.py",
+      "sha256": "8a1327fea981a5f6cb5891e5afda87873033b0f9de7b8e4f460d13c14454cbbf",
+      "size": 5114
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_lab_runtime.py",
+      "sha256": "efd2aac9af644d561f873fbb947a59d72824415d8a08f93d9917e0c0d1758e75",
+      "size": 5326
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_lab_scoring_sessions.py",
+      "sha256": "9cc5b793a53a5ff557b6443b5199fec603e7588aa166c101d93159bc673382ac",
+      "size": 17426
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_lab_workflow_records.py",
+      "sha256": "03d24f5aac5ddcf60f18161862d1517b60810a10484a15259afbcfaa9939cc91",
+      "size": 6884
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_ml_models.py",
+      "sha256": "94ba1d76b7af88f9fdd8d33c2e1a4280394b46da045570d090c4a97560e44fd9",
+      "size": 24585
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_packaging.py",
+      "sha256": "bf11793be2badf8989f8672019c916bd8286007b2be315f25606a704b0a8af5d",
+      "size": 6064
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_portfolio.py",
+      "sha256": "eef53573c74defbd1037733a7524df2045aabf265073400230c21487a612436a",
+      "size": 23892
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_portfolio_runtime.py",
+      "sha256": "4e6738171c7efde162e7b995fe599d70be69192e2a257956658c5d447b58dc3b",
+      "size": 16177
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_portfolio_workflow.py",
+      "sha256": "44edddeffcdf59145b6e46b982ff674156cf32ce93bc67f57588a857248f494a",
+      "size": 4626
     },
     {
       "executable": false,
@@ -1285,6 +1936,13 @@
     {
       "executable": false,
       "origin": "source",
+      "path": "tests/test_qlib_backtest_lifecycle.py",
+      "sha256": "da0f63836d891bcac5438c27fed96809d9ecf3d5c58760eb73bcb786dbe9339a",
+      "size": 18604
+    },
+    {
+      "executable": false,
+      "origin": "source",
       "path": "tests/test_qlib_chart_drawdown.py",
       "sha256": "656aade9d1b603a2dd5682395f4bfb85e4cbdeaa3e9c1c60026b0c3e98f76ea9",
       "size": 8017
@@ -1300,8 +1958,8 @@
       "executable": false,
       "origin": "source",
       "path": "tests/test_qlib_corporate_actions.py",
-      "sha256": "d54bbebe44b25f939a643528b9a2ff2143517b424236976edcb0986e0b6ec704",
-      "size": 21159
+      "sha256": "d7a40a042eb3ce540942938b1781cd973e7e4f9e66a1e78b936b1525e4e95632",
+      "size": 22189
     },
     {
       "executable": false,
@@ -1398,8 +2056,8 @@
       "executable": false,
       "origin": "source",
       "path": "tests/test_qlib_holding_series.py",
-      "sha256": "a3e059a940b6d4734cfc0d322893f94d7bf74fce78c964444c006c962f49f4ab",
-      "size": 19126
+      "sha256": "bd13d75d29efb9c220836bf8380c367f8d9b566d2e7ed241ad615c1e316e34cf",
+      "size": 19891
     },
     {
       "executable": false,
@@ -1419,8 +2077,8 @@
       "executable": false,
       "origin": "source",
       "path": "tests/test_qlib_jobs.py",
-      "sha256": "f3588408a2f0b220bda4d9610a2a964d665212e31f0730aa2d952980836fd4bd",
-      "size": 26421
+      "sha256": "ba651ff4f9b28d032b5174ea08dab4410ae6d3baa7b75a62d17fedcdf205e618",
+      "size": 26472
     },
     {
       "executable": false,
@@ -1685,8 +2343,8 @@
       "executable": false,
       "origin": "source",
       "path": "tests/test_qlib_streaming_columns.py",
-      "sha256": "d135ba2c00a260f43f843200efe48e660dc0bb33fcd8ea98c9a5ecd7cbc9a7b2",
-      "size": 22771
+      "sha256": "85edba5f97fec861d27552ab6fc42f084ae4d304664839cca7f9131820db80ea",
+      "size": 35338
     },
     {
       "executable": false,
@@ -1694,6 +2352,13 @@
       "path": "tests/test_qlib_streaming_options.py",
       "sha256": "d9c5b6a9c81568d25ff4035f7b62dd69080b328b3a8366467985883947e48610",
       "size": 12482
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_qlib_target_handoff.py",
+      "sha256": "5d11c8fe7e0851abeddca96f9b5bff17d5bfc17f736b5e81a5a160d275240b88",
+      "size": 10120
     },
     {
       "executable": false,
@@ -1810,9 +2475,23 @@
     {
       "executable": false,
       "origin": "source",
+      "path": "tests/test_refresh_promotion.py",
+      "sha256": "57921bae7889f95a4d758b9a9cb4b9849bf07097fe23d6c0bff54c0623c29cfb",
+      "size": 9166
+    },
+    {
+      "executable": false,
+      "origin": "source",
       "path": "tests/test_research_agents.py",
       "sha256": "8f317840067f870b0d26215f4c6e49485e2196de0f8e1b7834f977c321492b27",
       "size": 13713
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_research_console.py",
+      "sha256": "61b69cff1e10aba233295765ea2ce29d1171e10f33038092989fa7279e012565",
+      "size": 11282
     },
     {
       "executable": false,
@@ -1825,8 +2504,8 @@
       "executable": false,
       "origin": "source",
       "path": "tests/test_research_service.py",
-      "sha256": "7caeb65a46108453e66557262143e1ec0a25fae7016cdc30b6fdee87418d85e3",
-      "size": 16867
+      "sha256": "df994873489f17284c867e38b6c4b3a515195ee057598785f49bfade008d8d3a",
+      "size": 24020
     },
     {
       "executable": false,
@@ -1839,8 +2518,8 @@
       "executable": false,
       "origin": "source",
       "path": "tests/test_sec_batch_cache_frontend.py",
-      "sha256": "2541479f547b14cb9476c1216ee64c41a028df21589bdc0942cfd82ebc5c4539",
-      "size": 5647
+      "sha256": "e8b73b53f5815c35a06112cd055792f13a13f88223f759c0619186cc95158cf1",
+      "size": 5639
     },
     {
       "executable": false,
@@ -1853,15 +2532,15 @@
       "executable": false,
       "origin": "source",
       "path": "tests/test_sec_cli.py",
-      "sha256": "ba60dc30eaa6adffe0b33f27ba8b9d07924fcd971ea2aee93e4a0a218afeb7d2",
-      "size": 6820
+      "sha256": "a1dfaa59e2cf274ad66e204641f6652937030da0e4f53c225122a0cc83877b68",
+      "size": 9850
     },
     {
       "executable": false,
       "origin": "source",
       "path": "tests/test_sec_company_frontend.py",
-      "sha256": "a76ec76087adb7a6572249aa70f29729820ea345c57b4393605cbccfe5142078",
-      "size": 31455
+      "sha256": "47b61679ba33be03569728d585c1fd8c4434f75151d1be56140bba31a61ef36f",
+      "size": 31447
     },
     {
       "executable": false,
@@ -2023,6 +2702,76 @@
       "path": "tests/test_sec_search_frontend.py",
       "sha256": "35a5232957876209e6aca124dfb613ddc47a2c0ce01e24969ce59616f31312b1",
       "size": 3826
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_target_bundle.py",
+      "sha256": "c65c6e3f01c1a6af12f569febed822243bd21ba8ec2880897e12b30e35290ad9",
+      "size": 7695
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_workflow_chain.py",
+      "sha256": "fc7f2171e58e0ad871f4ee930ede427238520b27e27416252ef544d19bb5cdd5",
+      "size": 18940
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_workflow_cli.py",
+      "sha256": "a24a9a61fe485bb45c2a19630009aba41e4908d6f56c57eef8df8a2df5dc5377",
+      "size": 13203
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_workflow_frontend.py",
+      "sha256": "f03618f7c4e5f38dade05df08f622cc61e6a7f52a5f483fdf65556e43a124e26",
+      "size": 63870
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_workflow_qualification.py",
+      "sha256": "166aff3c6bb48b830c4e512a9c9641d538f624ce377482252880c05164569120",
+      "size": 12834
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_workflow_records.py",
+      "sha256": "f115f083ef7265451364f7367021c052ef7e6fa565553289c98a8cb87af124ba",
+      "size": 25133
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_workflow_recovery.py",
+      "sha256": "9e1cae2a54631a778283c4db81a5203c1246f4f9496631bf855b6015aab2fb1f",
+      "size": 2127
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_workflow_settings.py",
+      "sha256": "a63e393e77e86af28cffa574601a983be02c0381c70c2e65f0183936bd50777b",
+      "size": 2015
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/test_workflow_submission.py",
+      "sha256": "450971801e9f39c09bf191c2c64619bcff3524a4512b070de272a712053c68d6",
+      "size": 8005
+    },
+    {
+      "executable": false,
+      "origin": "source",
+      "path": "tests/workflow_fixture_helpers.py",
+      "sha256": "50107e7fa114316de58a3e337aba77e7b24516814176b22684806d2b36a270a7",
+      "size": 8446
     },
     {
       "executable": false,

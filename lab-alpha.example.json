@@ -1,0 +1,26 @@
+{
+  "name": "us-daily-discovery",
+  "domain": "alpha",
+  "seed": 7,
+  "settings": {
+    "dataset": "../datasets/your-prepared-snapshot",
+    "universe": "TOP1000",
+    "cost_bps": 5,
+    "warmup": 130,
+    "truncation": 0.05,
+    "development_start": "2014-01-02",
+    "development_end": "2018-12-31",
+    "validation_start": "2019-01-02",
+    "validation_end": "2022-12-30",
+    "holdout_start": "2023-01-03",
+    "search": {
+      "max_depth": 4,
+      "windows": [2, 3, 5, 10, 20, 40, 60],
+      "seeds": ["-rank(ts_delta(close, 5))"],
+      "seed_research_root": null
+    }
+  },
+  "policy": {"min_sharpe": 1.0, "min_dsr": 0.95, "dsr_variance": "null"},
+  "selection": {"max_correlation": 0.7},
+  "limits": {"max_rounds": 40, "proposals_per_round": 64, "validations_per_round": 3, "max_validation_trials": 80}
+}

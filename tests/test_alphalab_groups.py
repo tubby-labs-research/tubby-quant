@@ -174,7 +174,7 @@ class ClassificationBatchTests(unittest.TestCase):
     def test_cli_single_without_save_still_uses_verified_group_batch_path(self):
         from qlib_yahoo.__main__ import build_parser
         from qlib_yahoo.alphalab.cli import main
-        args = build_parser().parse_args(["alpha", "run", "rank(close)",
+        args = build_parser().parse_args(["--data-root", str(self.root), "alpha", "run", "rank(close)",
             "--dataset", str(self.dataset), "--group-overlay", self.source["path"],
             "--neutralization", "INDUSTRY"])
         with patch("qlib_yahoo.dataset.resolve_dataset", return_value=self.dataset), \
@@ -182,6 +182,7 @@ class ClassificationBatchTests(unittest.TestCase):
                 patch("qlib_yahoo.alphalab.cli.print_result"):
             main(args)
         self.assertEqual(run.call_args.kwargs["group_overlay"], Path(self.source["path"]))
+        self.assertEqual(run.call_args.kwargs["data_root"], self.root)
         self.assertEqual(run.call_args.args[2].neutralization, "INDUSTRY")
 
 
