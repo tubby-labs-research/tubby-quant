@@ -85,6 +85,26 @@ workflow's minimal NumPy/pandas dependencies. There is no pinned Linux signed
 runtime or verified desktop/setup path. See [contributing](../CONTRIBUTING.md)
 and the [workflow](../.github/workflows/tests.yml) for the bounded checks.
 
+## Install as a Python package (any platform)
+
+Alpha Lab screening, Research campaigns, the loopback console and the data
+adapters install as an ordinary package from the source folder:
+
+```bash
+python3.12 -m venv env/core
+env/core/bin/python -m pip install -e .
+env/core/bin/tubby-quant --browser --data-root ~/tubby-data
+```
+
+This provides the `tubby-quant` (console), `tubby-qlib` (datasets and Qlib
+backtests) and `tubby-research` (campaign worker) commands; the `python -m`
+forms keep working. Extras mirror the pinned requirement files: `.[qlib]` for
+the Qlib validation stack, `.[table]` for Parquet table imports, `.[desktop]`
+for the native window and `.[research]` for the direct Anthropic adapter. The
+package path installs no signed Qlib derivative and performs none of the
+runtime verification: signed validation still uses the platform setup above.
+On Windows use `env\core\Scripts\python.exe`.
+
 ## Dependencies and downloads
 
 Windows setup reads `requirements-qlib-windows.txt`; macOS setup reads

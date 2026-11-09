@@ -253,7 +253,7 @@ class CompanySecFrontendTests(unittest.TestCase):
                      'not a promise of company coverage or data quality', 'including special saved inputs'):
             self.assertIn(text, html)
         version = self.js('return UI_VERSION;')
-        self.assertEqual(version, 'workbench-cleanup-2026-10-14')
+        self.assertEqual(version, 'console-2026-11-07.2')
         self.assertEqual(html.count(version), 3)
 
     def test_alias_error_company_single_and_multiple_choices_hide_old_names_and_block_insert(self):

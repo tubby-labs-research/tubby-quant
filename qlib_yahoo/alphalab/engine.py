@@ -271,7 +271,10 @@ class Evaluator:
             keywords[canonical] = self._option(arg, node.name)
         if name in MEMBERS:
             keywords["members"] = self.context.members
-        return function(*args, **keywords)
+        try:
+            return function(*args, **keywords)
+        except (ValueError, TypeError) as error:  # e.g. a text where a number is required
+            raise ExpressionError(f"{node.name}(): {error}") from error
 
     def _option(self, node: Any, where: str) -> Any:
         value = self.value(node)

@@ -4,9 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <title>Tubby Alpha Lab · Qlib Validation</title>
-  <link rel="stylesheet" href="/static/app.css?v=workbench-cleanup-2026-10-14">
+  <title>Tubby Quant · Alpha Lab, Validation, Discover</title>
+  <link rel="stylesheet" href="/static/app.css?v=console-2026-11-07.2">
   <link rel="stylesheet" href="/static/research.css?v=research-2026-10-10.1">
+  <link rel="stylesheet" href="/static/workflow.css?v=evidence-1">
+  <link rel="stylesheet" href="/static/home.css?v=start-1">
+  <link rel="stylesheet" href="/static/discover.css?v=start-1">
 </head>
 <body data-view="lab">
 <div class="shell" id="shell">
@@ -19,7 +22,7 @@
         <path d="M14 45 L23 36 L31 40 L40 28 L50 19" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
         <circle cx="50" cy="19" r="4.4" fill="#fbbf24" stroke="#fff" stroke-width="1.6"/>
       </svg>
-      <span class="brand-name">Tubby Alpha Lab</span>
+      <span class="brand-name">Tubby Quant</span>
     </div>
     <div class="tb-group">
       <button class="tb-field lab-only" id="tb-lab-dataset" title="Choose Alpha Lab trading prices (⌘D)" aria-label="Alpha Lab Trading prices">
@@ -41,6 +44,7 @@
     <button class="tb-command" id="palette-btn" title="Command palette">
       <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><span>Search runs, commands, examples</span><kbd>⌘K</kbd>
     </button>
+    <button class="icon-btn tb-theme" id="toggle-theme" data-mode="system" title="Appearance: follows the system (click to change)" aria-label="Change appearance"><svg class="auto" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11A5.5 5.5 0 0 0 8 2.5z" fill="currentColor" stroke="none"/></svg><svg class="sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg><svg class="moon" viewBox="0 0 16 16"><path d="M13.5 9.8A6 6 0 0 1 6.2 2.5a6 6 0 1 0 7.3 7.3z"/></svg></button>
     <button class="icon-btn tb-toggle" id="toggle-inspector" title="Show or hide the settings panel (⌘I)" aria-label="Toggle settings panel"><svg viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.8"/><path d="M10 2.5v11"/></svg></button>
     <button class="btn primary" id="run" title="Run (⌘R)"><svg viewBox="0 0 12 12"><path d="M3 2l7 4-7 4z"/></svg><span id="run-label">Simulate alphas</span><kbd>⌘R</kbd></button>
     <button class="btn" id="cancel" title="Stop the running task (⌘.)" disabled><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1"/></svg>Stop</button>
@@ -49,17 +53,20 @@
   <div class="body" id="body">
     <!-- ========================================================== activity bar -->
     <nav class="activitybar" aria-label="Views">
-      <button class="act active" data-view="lab" title="Alpha Lab (⌘2)" aria-label="Alpha Lab">
+      <button class="act active" data-view="lab" title="Alpha Lab · simulate many BRAIN-style alphas at once (⌘2)" aria-label="Alpha Lab">
         <svg viewBox="0 0 20 20"><path d="M7.5 2.5h5M8.5 2.5v5.2L4.2 15.3a1.5 1.5 0 001.3 2.2h9a1.5 1.5 0 001.3-2.2L11.5 7.7V2.5"/><path d="M5.8 12.5h8.4"/></svg><span class="act-label">Alpha Lab</span>
       </button>
-      <button class="act" data-view="research" title="Qlib Validation · native expressions, next-open fills (⌘1)" aria-label="Qlib Validation">
+      <button class="act" data-view="research" title="Validation · a careful Qlib long/short backtest of one alpha with costs and next-open fills (⌘1)" aria-label="Qlib Validation">
         <svg viewBox="0 0 20 20"><path d="M3 15.5l4.5-5 3.2 3 6.3-7.5"/><path d="M13.5 6h3.5v3.5"/></svg><span class="act-label">Validation</span>
       </button>
-      <button class="act" data-view="data" title="Data (⌘3)" aria-label="Data">
+      <button class="act" data-view="data" title="Data · datasets, downloads, imports and quality scans (⌘3)" aria-label="Data">
         <svg viewBox="0 0 20 20"><ellipse cx="10" cy="5" rx="6.5" ry="2.5"/><path d="M3.5 5v10c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5V5"/><path d="M3.5 10c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5"/></svg><span class="act-label">Data</span>
       </button>
-      <button class="act" data-view="auto" title="Research (⌘4)" aria-label="Research">
+      <button class="act" data-view="auto" title="Research · literature-driven hypotheses, optionally proposed by an agent (⌘4)" aria-label="Research">
         <svg viewBox="0 0 20 20"><circle cx="5" cy="5" r="2"/><circle cx="15" cy="5" r="2"/><circle cx="10" cy="15" r="2"/><path d="M7 5h6M6 7l3 6M14 7l-3 6"/></svg><span class="act-label">Research</span>
+      </button>
+      <button class="act" data-view="evidence" title="Evidence · what was tried, when and with which settings; validation of saved candidates" aria-label="Evidence">
+        <svg viewBox="0 0 20 20"><path d="M5 2.5h7l3 3v12H5zM8 8h4M8 11h4M8 14h4"/></svg><span class="act-label">Evidence</span>
       </button>
       <div class="act-spacer"></div>
       <button class="act" id="toggle-bottom" title="Toggle panel (⌘J)" aria-label="Toggle panel">
@@ -162,7 +169,7 @@
           <div class="empty-state" id="result-empty">
             <svg viewBox="0 0 48 48"><path d="M6 38l10-12 8 6 18-22"/><path d="M34 10h8v8"/></svg>
             <div class="empty-title">No run selected</div>
-            <div class="empty-sub">Write an alpha, choose the window above and press <kbd>⌘R</kbd> — or pick a saved run on the left.</div>
+            <div class="empty-sub">Write one native Qlib expression, choose the window above and press <kbd>⌘R</kbd> — or pick a saved run on the left. New here? Open <b>Start</b> in the activity bar for a guided first session.</div>
           </div>
           <div class="result-body" id="result-body" hidden>
             <div class="run-head">
@@ -195,7 +202,7 @@
 
       <div class="cview" data-view="data">
         <section class="dataset-view" id="dataset-view">
-          <div class="empty-state"><div class="empty-title">No dataset selected</div><div class="empty-sub">Refresh market data or import a table with the panel on the right.</div></div>
+          <div class="empty-state"><div class="empty-title">No dataset selected</div><div class="empty-sub">Download market data or import a table with the panel on the right. For a first look, <b>Start</b> can create artificial demonstration data in seconds.</div></div>
         </section>
       </div>
 
@@ -224,7 +231,7 @@
           <div class="empty-state" id="lab-empty">
             <svg viewBox="0 0 48 48"><path d="M18 6h12M20 6v12L9 36a3 3 0 002.6 4.5h24.8A3 3 0 0039 36L28 18V6"/><path d="M14 30h20"/></svg>
             <div class="empty-title">Alpha Lab</div>
-            <div class="empty-sub">Choose Trading prices in the toolbar, write FASTEXPR alphas (one per line), and press <kbd>⌘R</kbd> to simulate and save to the library. Native Qlib expressions belong in Qlib Validation.</div>
+            <div class="empty-sub">Choose Trading prices in the toolbar, write FASTEXPR alphas (one per line, bare field names, <code>-rank(…)</code> is fine) and press <kbd>⌘R</kbd> to simulate and save to the library. New here? Open <b>Start</b> in the activity bar for a guided first session.</div>
           </div>
           <div class="result-body" id="lab-body" hidden></div>
         </section>
@@ -345,7 +352,7 @@
       <span class="sb-item mono" id="sb-dataset"></span>
       <button class="sb-item sb-link" id="sb-root" title="Show the data folder"></button>
       <span class="sb-item" id="sb-engine"><span class="sb-dot"></span><span>Signed engine</span></span>
-      <span class="sb-item mono" id="sb-version">UI workbench-cleanup-2026-10-14</span>
+      <span class="sb-item mono" id="sb-version">UI console-2026-11-07.2</span>
     </div>
   </footer>
 </div>
@@ -396,6 +403,9 @@
 <script src="/static/charts.js"></script>
 <script src="/static/analytics.js"></script>
 <script src="/static/research.js?v=research-2026-10-10.1"></script>
-<script src="/static/app.js?v=workbench-cleanup-2026-10-14"></script>
+<script src="/static/workflow.js?v=evidence-1"></script>
+<script src="/static/home.js?v=start-1"></script>
+<script src="/static/discover.js?v=start-1"></script>
+<script src="/static/app.js?v=console-2026-11-07.2"></script>
 </body>
 </html>

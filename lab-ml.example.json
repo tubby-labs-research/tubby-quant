@@ -1,0 +1,14 @@
+{
+  "name": "tabular-recipe-search",
+  "domain": "ml",
+  "seed": 5,
+  "settings": {
+    "task": "tabular",
+    "table": "builtin:friedman1",
+    "rows": 4000,
+    "split": {"development": 0.6, "validation": 0.2, "holdout": 0.2},
+    "search": {"families": ["ridge", "gbdt", "random_forest", "mlp"], "screen_fraction": 0.5}
+  },
+  "policy": {"alpha_level": 0.05, "min_relative_improvement": 0.02},
+  "limits": {"max_rounds": 10, "proposals_per_round": 10, "validations_per_round": 2, "max_validation_trials": 24}
+}

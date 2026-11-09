@@ -25,7 +25,8 @@ from qlib_yahoo.dataset import DatasetError
 ROOT = Path(__file__).resolve().parents[1]
 RESULT = "__QUANT_JOB_RESULT__="
 FAILURE = "__QUANT_JOB_ERROR__="
-KINDS = ("backtest", "backtest-batch", "import-table", "alpha-batch", "refresh-data", "build-dictionary")
+KINDS = ("backtest", "backtest-batch", "import-table", "alpha-batch", "refresh-data", "build-dictionary",
+         "candidate-validation", "portfolio-validation", "chronology-trial", "chronology-final")
 COMPLETED = "Backtest completed: "  # printed by run_backtest once the run is sealed, before any report
 ACTIVE_RUN = "__QUANT_JOB_ACTIVE_RUN__="
 ACTIVE_BATCH = "__QUANT_JOB_ACTIVE_BATCH__="
@@ -56,7 +57,43 @@ def _python() -> Path:
 
 
 def _run_request(request: dict[str, Any]) -> Path:
+    from qlib_yahoo.workflow_submission import run_worker_submission
+
+    return run_worker_submission(request, _dispatch_request)
+
+
+def _dispatch_request(request: dict[str, Any]) -> Path:
     kind = request.pop("kind", None)
+    if kind in ("chronology-trial", "chronology-final"):
+        from qlib_yahoo.chronology_workflow import submit_chronology_trial, evaluate_chronology_final
+        from qlib_yahoo.workflow_records import EvidenceStore
+        from qlib_yahoo.workflow_submission import current_submission
+
+        if set(request) - {"data_root", "parameters", "_cancel_file"}:
+            raise DatasetError("unrecognized chronology worker options")
+        root = Path(request["data_root"]).absolute()
+        current = current_submission()
+        if current and current["store"].root.parent != root:
+            raise DatasetError("chronology worker evidence and execution data roots differ")
+        cancel_file = Path(request["_cancel_file"]) if request.get("_cancel_file") else None
+        print(f"Chronology {kind.split('-')[1]}: preparing recorded request", flush=True)
+        execute = submit_chronology_trial if kind == "chronology-trial" else evaluate_chronology_final
+        response = execute(root, request["parameters"],
+                           cancel=(lambda: cancel_file.exists()) if cancel_file else None,
+                           progress=lambda message: print(message, flush=True))
+        # The result marker names ordinary immutable JSON, not a backtest run
+        # or an Alpha Lab library batch. The receipt retains IDs and holdout labels.
+        store = EvidenceStore(root)
+        digest = store.add_result(response)
+        return store.root / "results" / (digest + ".json")
+    if kind == "candidate-validation":
+        from qlib_yahoo.validation_workflow import validate_candidate
+        return validate_candidate(Path(request["data_root"]), request["parameters"],
+                                  cancel_file=request.get("_cancel_file"))
+    if kind == "portfolio-validation":
+        from qlib_yahoo.portfolio_workflow import run_portfolio
+        return run_portfolio(Path(request["data_root"]), request["parameters"],
+                             cancel_file=request.get("_cancel_file"))
     if kind == "build-dictionary":
         from qlib_yahoo.sec_registry import build_dictionary, dictionary_status
         from qlib_yahoo.sec_execution import build_execution_index
@@ -178,7 +215,8 @@ class Job:
         self.cancelled = False
         self._lock = threading.Lock()
         self._cancel_file = (Path(tempfile.gettempdir()) / f"quant-job-cancel-{uuid4().hex}"
-                             if request.get("kind") in ("backtest", "backtest-batch") else None)
+                             if request.get("kind") in ("backtest", "backtest-batch", "candidate-validation",
+                                                        "portfolio-validation", "chronology-trial", "chronology-final") else None)
 
     def cancel(self) -> bool:
         with self._lock:
@@ -292,34 +330,78 @@ def _record_cancelled(payload: str, active_run, active_batch):
     neither their history nor an interrupted batch is promoted to completed.
     """
     from qlib_yahoo.backtest import _atomic_json, _now
+    from qlib_yahoo.workflow_records import _checked
     request = json.loads(payload)
     # Import/refresh jobs have no backtest records (and need not name a
     # dataset). Keep their cancellation outcome independent of this repair.
     if not active_run and not active_batch:
         return
-    dataset = Path(request["dataset"]).resolve()
-    data_root = Path(request.get("data_root") or dataset.parent.parent).resolve()
+    kind = request.get("kind")
+    # Lab/chronology receipts are immutable evidence, not mutable workbench
+    # backtest batches. Never interpret their markers as cancellation targets.
+    if kind not in (None, "backtest", "backtest-batch", "candidate-validation", "portfolio-validation"):
+        return
+
+    def absolute(value):
+        if not isinstance(value, (str, Path)) or not str(value):
+            raise ValueError("missing cancellation path")
+        path = Path(value).expanduser()
+        if ".." in path.parts:
+            raise ValueError("cancellation path traversal")
+        path = _checked(path.absolute())
+        if any(component.is_symlink() or (hasattr(component, "is_junction") and component.is_junction())
+               for component in (path, *path.parents)):
+            raise ValueError("redirected cancellation ancestor")
+        return path
+
+    scoped = kind in ("candidate-validation", "portfolio-validation")
+    try:
+        dataset = absolute(request["dataset"]) if request.get("dataset") else None
+        data_root = absolute(request["data_root"]) if request.get("data_root") else (
+            dataset.parent.parent if dataset is not None else None)
+        if data_root is None or (not scoped and dataset is None):
+            return
+        # Preserve the original dataset-relative run guard for normal backtests.
+        # Candidate/portfolio requests instead name only the data root; their
+        # source dataset must be resolved from a safely confined manifest below.
+        run_parent = _checked(data_root / "runs" if scoped else dataset.parent.parent / "runs")
+    except (OSError, ValueError):
+        return
     completed_run = None
     for selected, category in ((active_run, "run"), (active_batch, "batch")):
         if not selected:
             continue
-        path = Path(selected)
-        # run_backtest keeps runs beside its dataset; the receipt can live in
-        # an explicitly different data_root. Check every ancestor before any
-        # repair so a redirected runs/batches directory cannot widen the target.
-        parent = dataset.parent.parent / "runs" if category == "run" else data_root / "workbench/batches"
-        if (any(component.is_symlink() or (hasattr(component, "is_junction") and component.is_junction())
-                for component in (path, *path.parents)) or path.parent.resolve() != parent.resolve()):
-            continue
-        manifest_path = path / "manifest.json" if category == "run" else path
-        if manifest_path.is_symlink() or not manifest_path.is_file():
+        if category == "batch" and kind not in (None, "backtest-batch"):
             continue
         try:
+            path = absolute(selected)
+            if not Path(selected).is_absolute():
+                continue  # A child marker must name an explicit absolute target.
+            parent = run_parent if category == "run" else _checked(data_root / "workbench/batches")
+            if path.parent != parent:
+                continue
+            manifest_path = _checked(path / "manifest.json" if category == "run" else path)
+            if not manifest_path.is_file():
+                continue
             record = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if not isinstance(record, dict):
+                continue
+            recorded_dataset = None
+            if category == "run":
+                if record.get("dataset"):
+                    recorded_dataset = absolute(record["dataset"])
+                if scoped:
+                    # Both guards must agree: exact data_root/runs AND the
+                    # original run_backtest dataset.parent.parent/runs layout.
+                    if (recorded_dataset is None or recorded_dataset.parent != _checked(data_root / "datasets")
+                            or _checked(recorded_dataset.parent.parent / "runs") != run_parent):
+                        continue
+                if dataset is not None and recorded_dataset is not None and recorded_dataset != dataset:
+                    continue
             if category == "run" and record.get("status") == "completed":
-                if (Path(record.get("dataset", "")).resolve() == dataset
+                if (recorded_dataset == dataset
                         and record.get("alpha") in request.get("alphas", [request.get("alpha")])):
-                    completed_run = str(path.resolve())
+                    completed_run = str(path)
                 continue
             if record.get("status") not in (("running", "cancelled") if category == "batch" else ("running",)):
                 continue
@@ -328,7 +410,7 @@ def _record_cancelled(payload: str, active_run, active_batch):
             record.update(status="failed" if category == "run" else "cancelled", cancelled_at_utc=_now(),
                           error={"type": "JobCancelled", "message": "cancelled by the user; partial files retained"})
             _atomic_json(manifest_path, record)
-        except (OSError, ValueError):
+        except (OSError, ValueError, TypeError):
             pass  # UI cancellation still succeeds if an interrupted record cannot be repaired.
 
 

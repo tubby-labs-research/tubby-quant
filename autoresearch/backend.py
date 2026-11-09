@@ -84,6 +84,9 @@ class AlphaLabBackend:
                                     "pasteurization", "booksize") if key in config}, delay=1).validate()
         if self.settings.warmup < 2:
             raise ValueError("warmup must be at least 2 sessions for delay=1")
+        # The reserved holdout is part of the configuration, never of the research identity:
+        # changing it must not invalidate development/validation evidence (see identity()).
+        self.holdout_start = config.get("holdout_start")
 
     def _effective_settings(self):
         settings = asdict(self.settings)
@@ -182,9 +185,42 @@ class AlphaLabBackend:
         message = str(error).replace(str(self.dataset), "<dataset>").replace(str(self.runtime_root), "<runtime>")
         return re.sub(r"(?<![\w])/(?:[^\s'\"<>]+/)*[^\s'\"<>]*", "<local-path>", message)[:2000]
 
-    def evaluate(self, expression):
+    def _simulate_period(self, expression, isolated, period, start, end):
+        """One bounded Alpha Lab run with the campaign settings; ``end`` None means the dataset end."""
         from qlib_yahoo.alphalab.batch import run_batch
 
+        settings = replace(self.settings, start=start, end=end)
+        raw = run_batch(self.dataset, [expression], settings, data_root=isolated,
+                        library=isolated / "library.sqlite", workers=1, worker_ceiling=1)[0]
+        if "error" in raw and raw.get("cached"):
+            # The native library retains failures too. A controller retry
+            # must reattempt a failed period, while successful periods
+            # continue to reuse their normal native cache entries.
+            raw = run_batch(self.dataset, [expression], settings, data_root=isolated,
+                            library=isolated / "library.sqlite", workers=1,
+                            worker_ceiling=1, force=True)[0]
+        if "error" in raw:
+            raise ValueError(self._error(raw["error"]))
+        dates = raw["daily"]["dates"]
+        if not dates or any(day < start or (end is not None and day > end) for day in dates):
+            raise ValueError(f"engine returned dates outside {period} bounds")
+        return raw
+
+    def _simulate_in_memory(self, expression, panel, period, start, end):
+        """One bounded Alpha Lab run on an already opened panel: the batch runner's simulator without
+        its disk cache or library. The lab's holdout path passes the panel that
+        ``autoresearch.domains.alpha.holdout.open_holdout_panel`` returns, so the process never
+        builds a workspace from the whole snapshot for a final."""
+        from qlib_yahoo.alphalab.simulate import Workspace, json_safe, simulate
+
+        settings = replace(self.settings, start=start, end=end)
+        raw = json_safe(simulate(expression, settings, Workspace(self.dataset, panel=panel)))
+        dates = raw["daily"]["dates"]
+        if not dates or any(day < start or (end is not None and day > end) for day in dates):
+            raise ValueError(f"engine returned dates outside {period} bounds")
+        return raw
+
+    def evaluate(self, expression):
         result = {"status": "error", "metrics": {}, "periods": {}, "settings": self._effective_settings()}
         try:
             identity = self.identity()
@@ -200,21 +236,7 @@ class AlphaLabBackend:
             periods, artifacts, cached = {}, {}, True
             for period in ("development", "validation"):
                 start, end = self.bounds[period + "_start"], self.bounds[period + "_end"]
-                settings = replace(self.settings, start=start, end=end)
-                raw = run_batch(self.dataset, [expression], settings, data_root=isolated,
-                                library=isolated / "library.sqlite", workers=1, worker_ceiling=1)[0]
-                if "error" in raw and raw.get("cached"):
-                    # The native library retains failures too. A controller retry
-                    # must reattempt a failed period, while successful periods
-                    # continue to reuse their normal native cache entries.
-                    raw = run_batch(self.dataset, [expression], settings, data_root=isolated,
-                                    library=isolated / "library.sqlite", workers=1,
-                                    worker_ceiling=1, force=True)[0]
-                if "error" in raw:
-                    raise ValueError(self._error(raw["error"]))
-                dates = raw["daily"]["dates"]
-                if not dates or any(not start <= day <= end for day in dates):
-                    raise ValueError(f"engine returned dates outside {period} bounds")
+                raw = self._simulate_period(expression, isolated, period, start, end)
                 periods[period] = _finite(raw["summary"])
                 artifacts[period] = {"summary": periods[period], "daily": _finite(raw["daily"])}
                 cached = cached and bool(raw.get("cached"))
@@ -224,6 +246,57 @@ class AlphaLabBackend:
             artifact.parent.mkdir(parents=True, exist_ok=True)
             artifact.write_text(json.dumps(artifacts, sort_keys=True, allow_nan=False) + "\n")
             result.update(status="ok", metrics=periods, periods=periods, cached=cached,
+                          artifacts=[artifact.relative_to(self.runtime_root).as_posix()])
+        except Exception as error:
+            result["error"] = self._error(error)
+        return _finite(result)
+
+    def holdout_bounds(self):
+        """The reserved period: configured ``holdout_start`` through the dataset's last session."""
+        if not self.holdout_start:
+            raise ValueError("this campaign reserved no holdout_start; there is nothing to finalize")
+        return _date(self.holdout_start, "holdout_start").isoformat(), None
+
+    def evaluate_holdout(self, expression, *, panel=None):
+        """Score the reserved holdout as a separate final record.
+
+        Research decisions never read this result: it is stored under its own
+        isolated cache, written to a ``finals`` artifact, and only the
+        controller's explicit ``finalize`` calls it. Access accounting (first
+        use versus labelled reuse) is the controller's responsibility.
+
+        ``panel``: an in-memory panel of the holdout window opened by
+        ``autoresearch.domains.alpha.holdout.open_holdout_panel``; the lab
+        passes one so a final never loads the whole snapshot. Without it the
+        canonical disk-cached batch runner reads the snapshot (the Research
+        loop's path). The summary and daily series are the same either way.
+        """
+        start, end = self.holdout_bounds()
+        result = {"status": "error", "metrics": {}, "periods": {},
+                  "settings": {**self._effective_settings(), "holdout_start": start,
+                               "holdout_end": end or "dataset end", "holdout_evaluated": True}}
+        try:
+            identity = self.identity()
+            result.update(engine=identity["engine"], data_identity=identity["data_identity"])
+            problems = self.validate(expression)
+            if problems:
+                result["error"] = "; ".join(problems)
+                result["error_kind"] = "expression"
+                return result
+            isolated = self.runtime_root / "backend" / _digest(identity) / "holdout"
+            if panel is None:
+                raw = self._simulate_period(expression, isolated, "holdout", start, end)
+            else:
+                raw = self._simulate_in_memory(expression, panel, "holdout", start, end)
+            summary = _finite(raw["summary"])
+            if self.identity() != identity:
+                raise ValueError("data or engine identity changed during evaluation")
+            artifact = isolated / "finals" / (_digest(expression) + ".json")
+            artifact.parent.mkdir(parents=True, exist_ok=True)
+            artifact.write_text(json.dumps({"holdout": {"summary": summary, "daily": _finite(raw["daily"])}},
+                                           sort_keys=True, allow_nan=False) + "\n")
+            result.update(status="ok", metrics={"holdout": summary}, periods={"holdout": summary},
+                          cached=bool(raw.get("cached")),
                           artifacts=[artifact.relative_to(self.runtime_root).as_posix()])
         except Exception as error:
             result["error"] = self._error(error)

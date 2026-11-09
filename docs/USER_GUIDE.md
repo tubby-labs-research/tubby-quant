@@ -1,8 +1,36 @@
 # Use the workbench
 
-Launch using [INSTALL.md](INSTALL.md). Start with **Research → Try demo**, then
+Launch using [INSTALL.md](INSTALL.md). A data folder without prepared prices
+opens on **Start**, which creates demonstration data, simulates three starter
+alphas and opens Discover ([console quick start](CONSOLE_QUICKSTART.md)). Then
 select your own prepared datasets for market research. No data subscription,
 provider account or trade execution is supplied.
+
+## A first session (Start)
+
+When the data folder holds no usable prices the console opens on **Start**
+(`⌘0` brings it back at any time). Three cards take you from an empty folder
+to a tested idea, and every button opens the view that step belongs to:
+
+1. **Get prices.** *Create demonstration data* writes `datasets/demo-planted-200`
+   in a few seconds: 200 fictional stocks over six years with three planted
+   signals (a five-day reversal, a volume shock, low volatility). The manifest
+   says artificial and the interface labels it as demonstration data wherever it
+   appears. *Download US daily prices (Yahoo)* is the real-data refresh (about an
+   hour, resumable); *Import a table…* opens the import section of Data.
+2. **Simulate an alpha.** *Simulate these three now* fills Alpha Lab with three
+   starter expressions and runs them; *Open Alpha Lab* only opens the editor.
+3. **Let the machine search.** *Run a short demo campaign* runs a Quick
+   alpha-discovery campaign on the demonstration data; *Discover alphas* and
+   *Search model recipes* open Discover's new-campaign form.
+
+The checklist on the left marks prices ready, an alpha simulated and a campaign
+run; the panel on the right shows the signed-engine state, the data folder and
+the version. The demonstration data exists so that the examples have something
+to find: the discovery demo should recover the planted signals, and the
+factor-analysis demo's importance chart should rank `ret_5`,
+`log_volume_shock` and `vol_20` highly. Nothing computed on it has economic
+meaning.
 
 ## Screen in Alpha Lab
 
@@ -29,6 +57,26 @@ Use **SEC fields** for fundamentals; see the [field guide](SEC_FIELDS_USER_GUIDE
 For scripts, `python -m qlib_yahoo alpha operators` lists supported operators.
 Use the installed environment's Python and put global `--data-root` before `alpha`.
 
+## Drive Alpha Lab from an agent (MCP)
+
+The framework ships a Model Context Protocol server so Claude Code, Codex or
+any MCP client can check and simulate alphas on your prepared data and read
+research reports, without shell access to the machine:
+
+```bash
+claude mcp add tubby-alpha-lab -- tubby-alpha-mcp --data-root ~/tubby-data
+```
+
+(`python -m qlib_yahoo.alphalab.mcp --data-root ~/tubby-data` without the
+package install.) Tools: `list_operators`, `check_expression`, `list_datasets`,
+`simulate_alpha`, `simulate_batch` (leaderboard and correlated pairs),
+`library_list` and the read-only `research_report`. Datasets are addressed by
+folder name under the data root; paths outside it are refused. The server
+performs no trading, no model calls, no data downloads, and never scores a
+research campaign's reserved holdout. Metrics are Alpha Lab's fixed-book,
+close-to-close results after the configured cost: research evidence, not a
+trading recommendation.
+
 ## Validate with Qlib
 
 Choose **Qlib Validation**, its dataset/universe and a native expression such as
@@ -45,6 +93,16 @@ Saved results retain original settings and provenance. Report generation can
 fail separately from simulation. Inspect diagnostics and retain the complete
 run folder for offline reports. A matching expression alone does not establish
 matching inputs, accounting or returns across engines.
+
+## Evidence, validation and portfolios
+
+Every submitted Lab, Qlib and portfolio attempt is recorded in a sealed,
+append-only store under the data root. Open **Evidence** to trace an attempt to
+its parents, preview and run a signed Qlib validation of a saved Lab result,
+combine one or two validated signals in one shared account with explicit risk
+limits, or declare a chronological protocol whose final window is scored once.
+The `tubby-qlib workflow` commands and loopback API expose the same steps. See
+[Evidence](EVIDENCE.md) for the exact contracts and refusals.
 
 ## Research campaigns
 
@@ -64,5 +122,34 @@ of the source distribution.
 Stop saves bounded-step recovery state; app closure stops its worker. Continuous
 mode runs while the app/process and machine remain available, within budgets.
 Review retained failures as well as successes. Promotion means further research,
-not Qlib validation or a trading recommendation. Reserved holdout is not scored.
+not Qlib validation or a trading recommendation. Research decisions never score
+the reserved holdout. When promoted candidates exist, `python -m autoresearch
+finalize <campaign.json>` scores each of them once on the holdout and records an
+immutable final with a `confirmed` / `not_confirmed` verdict; a repeated access
+is refused unless requested and is then labelled `reused`, and later hypotheses
+are labelled `post_holdout`. `python -m autoresearch export <campaign.json>
+--output promoted.txt` writes promoted (or `--decision confirmed`) expressions
+as an Alpha Lab batch file for Lab screening and Qlib validation;
+`python -m autoresearch report --markdown` summarises a campaign. The console
+offers the same as **Finalize on holdout** and **Send promoted to Alpha Lab**
+in the campaign header, shows finals beside each idea, and lists
+**OpenAI-compatible · direct model** as a research agent (`OPENAI_API_KEY` on
+the app process, or a loopback `QUANT_OPENAI_BASE_URL` for a local server).
 Research campaigns do not currently use SEC inputs or dated classification overlays.
+
+## Discover: autonomous alpha discovery and machine learning
+
+Discover runs the lab harness without a campaign file: choose a domain
+(**Alphas** searches typed FASTEXPR expressions; **Models** searches training
+recipes, by default as factor analysis on a price panel), a preset, the prices
+and universe, costs and gates. The campaign runs in its own worker process on
+development data only, validates a few shortlisted candidates per round, reviews
+them with the deflated Sharpe ratio and robustness vetoes, and scores the
+reserved holdout once, after an explicit confirmation. Campaigns of one domain
+share a record store and a hash-chained trial ledger, so the same campaign file
+also works from the command line (`tubby-lab status|report|verify <campaign.json>`).
+The rules, the campaign file format and the `tubby-lab` commands are in
+[LAB_DOMAINS.md](LAB_DOMAINS.md); measured results on artificial panels are in
+[LAB_BENCHMARKS.md](LAB_BENCHMARKS.md). Demonstration data is artificial and
+labelled as such in every view; promotion on it is evidence about the tools,
+not about any market.

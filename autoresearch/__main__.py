@@ -14,13 +14,18 @@ from .controller import Controller
 from .records import ResearchStore
 
 
-def report(root):
+def report(root, campaign_id=None):
+    from .handoff import campaign_report
+
     store = ResearchStore(root)
-    return {"sources": len(store.list("sources")), "hypotheses": len(store.list("hypotheses")),
-            "experiments": len(store.list("experiments")), "campaigns": len(store.list("campaigns")),
-            "findings": [{key: row.get(key) for key in
-                          ("hypothesis_id", "experiment_id", "decision", "reason", "question", "expected_change")}
-                         for row in store.list("reviews")]}
+    value = {"sources": len(store.list("sources")), "hypotheses": len(store.list("hypotheses")),
+             "experiments": len(store.list("experiments")), "campaigns": len(store.list("campaigns")),
+             "findings": [{key: row.get(key) for key in
+                           ("hypothesis_id", "experiment_id", "decision", "reason", "question", "expected_change")}
+                          for row in store.list("reviews")]}
+    detail = campaign_report(store, campaign_id)
+    value.update(finals=detail["finals"], decisions=detail["decisions"], table=detail["hypotheses"])
+    return value
 
 
 def run(config, *, continuous=False, max_steps=100, allow_model=False):
@@ -74,6 +79,19 @@ def main(argv=None):
     for name in ("report", "reindex"):
         command = commands.add_parser(name)
         command.add_argument("--research-root", type=Path, default=default_research_root())
+        if name == "report":
+            command.add_argument("--campaign", help="restrict the table and finals to one campaign ID")
+            command.add_argument("--markdown", action="store_true", help="print a human summary instead of JSON")
+    finalize = commands.add_parser("finalize", help="score promoted hypotheses once on the reserved holdout")
+    finalize.add_argument("config", type=Path)
+    finalize.add_argument("--hypothesis", action="append", default=[],
+                          help="explicit hypothesis ID (repeatable); default: every promoted hypothesis")
+    finalize.add_argument("--allow-reuse", action="store_true",
+                          help="record a labelled repeated holdout access instead of refusing it")
+    export = commands.add_parser("export", help="write candidate expressions as an Alpha Lab batch file")
+    export.add_argument("config", type=Path)
+    export.add_argument("--output", type=Path, required=True, help="new batch file (one FASTEXPR per line)")
+    export.add_argument("--decision", choices=("promote", "confirmed", "all"), default="promote")
     args = parser.parse_args(argv)
     try:
         if args.command == "demo":
@@ -85,7 +103,22 @@ def main(argv=None):
             return run(load_config(args.config), continuous=args.continuous,
                        max_steps=args.max_steps, allow_model=args.allow_model)
         if args.command == "report":
-            print(json.dumps(report(args.research_root), indent=2))
+            if args.markdown:
+                from .handoff import campaign_report, render_markdown
+                print(render_markdown(campaign_report(ResearchStore(args.research_root), args.campaign)), end="")
+            else:
+                print(json.dumps(report(args.research_root, args.campaign), indent=2))
+        elif args.command == "finalize":
+            controller = Controller(load_config(args.config))
+            outcomes = controller.finalize(args.hypothesis or None, allow_reuse=args.allow_reuse)
+            print(json.dumps({"campaign_id": controller.campaign_id, "status": "finalized", "finals": outcomes},
+                             sort_keys=True), flush=True)
+        elif args.command == "export":
+            from .handoff import campaign_report, export_batch
+            config = load_config(args.config)
+            store = ResearchStore(Path(config.get("research_root", default_research_root())))
+            path = export_batch(campaign_report(store), args.output, args.decision)
+            print(json.dumps({"status": "written", "batch": str(path), "decision": args.decision}))
         elif args.command == "reindex":
             path = ResearchStore(args.research_root).rebuild_index()
             print(json.dumps({"status": "rebuilt", "index": str(path)}))

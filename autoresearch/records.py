@@ -1,6 +1,7 @@
 """Portable immutable JSON evidence; SQLite is a disposable search aid only."""
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
 from contextlib import closing, contextmanager
 from dataclasses import fields, is_dataclass
 import hashlib
@@ -8,16 +9,19 @@ import json
 import os
 from pathlib import Path
 import re
+import builtins
 import sqlite3
+import sys
 import tempfile
 import threading
+from typing import Any
 
-COLLECTIONS = frozenset({'sources', 'hypotheses', 'experiments', 'reviews', 'events', 'campaigns'})
+COLLECTIONS = frozenset({'sources', 'hypotheses', 'experiments', 'reviews', 'events', 'campaigns', 'finals'})
 _SAFE_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z')
 
 
-def _json(value):
-    def check(v):
+def _json(value: Any) -> str:
+    def check(v: Any) -> None:
         if isinstance(v, dict):
             if any(not isinstance(k, str) for k in v):
                 raise ValueError('JSON object keys must be strings')
@@ -34,14 +38,14 @@ def _json(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False)
 
 
-def stable_id(kind, value):
+def stable_id(kind: str, value: Any) -> str:
     """Content identity independent of mapping order and local filesystem paths."""
     if not isinstance(kind, str) or not _SAFE_ID.fullmatch(kind) or len(kind) > 40:
         raise ValueError('invalid identity kind')
     return kind + '_' + hashlib.sha256(_json(value).encode('utf-8')).hexdigest()[:40]
 
 
-def canonical_expression(expression):
+def canonical_expression(expression: str) -> str:
     """Serialize the actual FASTEXPR AST, preserving order and string contents.
 
     Whitespace, redundant parentheses and number spelling normalize; algebraic
@@ -49,7 +53,7 @@ def canonical_expression(expression):
     Invalid syntax raises the existing parser's ExpressionError.
     """
     from qlib_yahoo.alphalab.fastexpr import parse
-    def node(v):
+    def node(v: Any) -> Any:
         if is_dataclass(v):
             return {'type': type(v).__name__, **{f.name: node(getattr(v, f.name)) for f in fields(v)}}
         if isinstance(v, tuple):
@@ -59,13 +63,13 @@ def canonical_expression(expression):
 
 
 class ResearchStore:
-    def __init__(self, root):
+    def __init__(self, root: str | Path) -> None:
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self._mutex = threading.RLock()
         self._lock_depth = 0
 
-    def _directory(self, collection):
+    def _directory(self, collection: str) -> Path:
         if collection not in COLLECTIONS:
             raise ValueError('unknown research collection')
         directory = self.root / collection
@@ -73,7 +77,7 @@ class ResearchStore:
             raise ValueError('collection directories must not be symlinks')
         return directory
 
-    def _path(self, collection, record_id):
+    def _path(self, collection: str, record_id: Any) -> Path:
         if not isinstance(record_id, str) or not _SAFE_ID.fullmatch(record_id):
             raise ValueError('invalid record id')
         path = self._directory(collection) / (record_id + '.json')
@@ -82,7 +86,7 @@ class ResearchStore:
         return path
 
     @contextmanager
-    def lock(self):
+    def lock(self) -> Iterator[ResearchStore]:
         """Nonblocking OS advisory single-writer lock, released after process death."""
         with self._mutex:
             if self._lock_depth:
@@ -97,7 +101,7 @@ class ResearchStore:
                 raise ValueError('lock file must not be a symlink')
             handle = open(lock_path, 'a+b')
             try:
-                if os.name == 'nt':
+                if sys.platform == 'win32':
                     import msvcrt
                     handle.seek(0)
                     if not handle.read(1):
@@ -118,7 +122,7 @@ class ResearchStore:
                 self._lock_depth = 0
                 handle.close()
 
-    def get(self, collection, record_id):
+    def get(self, collection: str, record_id: str) -> dict[str, Any] | None:
         path = self._path(collection, record_id)
         if not path.exists():
             return None
@@ -128,13 +132,19 @@ class ResearchStore:
             raise ValueError('record identity does not match filename')
         return record
 
-    def list(self, collection):
+    def list(self, collection: str) -> list[dict[str, Any]]:
         directory = self._directory(collection)
         if not directory.exists():
             return []
-        return [self.get(collection, path.stem) for path in sorted(directory.glob('*.json'))]
+        records: list[dict[str, Any]] = []
+        for path in sorted(directory.glob('*.json')):
+            record = self.get(collection, path.stem)
+            if record is None:  # removed between the directory listing and the read
+                raise ValueError('record disappeared while listing: ' + path.stem)
+            records.append(record)
+        return records
 
-    def put(self, collection, record):
+    def put(self, collection: str, record: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(record, dict):
             raise ValueError('record must be a JSON object with explicit id')
         encoded = _json(record)
@@ -159,13 +169,13 @@ class ResearchStore:
                 os.unlink(temporary)
         return json.loads(encoded)
 
-    def find_experiment(self, key):
+    def find_experiment(self, key: str) -> dict[str, Any] | None:
         for record in self.list('experiments'):
             if record.get('experiment_key') == key and isinstance(record.get('result'), dict) and record['result'].get('status') == 'ok':
                 return record
         return None
 
-    def related_hypotheses(self, text, limit=5):
+    def related_hypotheses(self, text: str, limit: int = 5) -> builtins.list[dict[str, Any]]:
         if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
             raise ValueError('limit must be a nonnegative integer')
         words = lambda value: set(re.findall(r'[a-z0-9_]+', value.lower()))
@@ -180,7 +190,7 @@ class ResearchStore:
                 continue
             linked = [e for e in experiments if e.get('hypothesis_id') == hypothesis['id']]
             ids = {e['id'] for e in linked}
-            def bounded(value):
+            def bounded(value: Any) -> Any:
                 if isinstance(value, str):
                     return value if len(value) <= 4000 else value[:4000] + ' [truncated]'
                 if isinstance(value, dict):
@@ -194,7 +204,7 @@ class ResearchStore:
             ranked.append((score, hypothesis['id'], result))
         return [item[2] for item in sorted(ranked, key=lambda item: (-item[0], item[1]))[:limit]]
 
-    def rebuild_index(self):
+    def rebuild_index(self) -> Path:
         """Rebuild after merges; readers and dedup never rely on stale index state."""
         with self.lock():
             fd, temporary = tempfile.mkstemp(prefix='.index-', dir=self.root)

@@ -376,6 +376,20 @@ class ImportWithActionsTests(unittest.TestCase):
             a.column("S5")
         with self.assertRaisesRegex(DatasetError, "no field"):
             load_panel(self.snapshot, ("vwap",))
+        # A bounded load reads only the window's rows, from plain bin files and from the verified
+        # archive alike, and equals the slice of the full panel.
+        dates = [str(day) for day in a.dates]
+        lo, hi = len(dates) // 3, 2 * len(dates) // 3
+        for source in (self.snapshot, packed):
+            window = load_panel(source, fields, start_date=dates[lo], end_date=dates[hi])
+            self.assertEqual([str(day) for day in window.dates], dates[lo:hi + 1])
+            for name in fields:
+                self.assertTrue(self.np.array_equal(window.fields[name], a.fields[name][lo:hi + 1], equal_nan=True), name)
+            tail = load_panel(source, ("close",), end_date=dates[hi])
+            self.assertEqual(len(tail.dates), hi + 1)
+            self.assertTrue(self.np.array_equal(tail.fields["close"], a.fields["close"][:hi + 1], equal_nan=True))
+        with self.assertRaisesRegex(DatasetError, "no session"):
+            load_panel(self.snapshot, fields, start_date=dates[hi], end_date=dates[lo])
 
     def test_groups_are_recorded_and_verified(self):
         from qlib_yahoo.reference import dataset_groups

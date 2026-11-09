@@ -42,6 +42,7 @@ def source_identity(dataset: Path) -> dict:
     identity = {"dataset": str(dataset), "verified": verified,
                 "qlib_binary_tree_sha256": verified["qlib_binary_tree_sha256"], "manifest_sha256": digest(manifest),
                 "auxiliary": auxiliary, "symbols": symbols, "dates": dates,
-                "fields": [f for f in FIELDS if f in available_fields(manifest)]}
+                "fields": [f for f in FIELDS if f in available_fields(manifest)],
+                "universes": dataset_universes(manifest)}
     identity["source_sha256"] = digest(identity)
     return identity
