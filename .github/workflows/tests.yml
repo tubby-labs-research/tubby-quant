@@ -38,6 +38,8 @@ jobs:
               "test_autoresearch_records.py",
               "test_autoresearch_controller.py",
               "test_research_agents.py",
+              "test_packaging.py",
+              "test_alphalab_mcp.py",
           )
           for pattern in patterns:
               assert (Path("tests") / pattern).is_file(), pattern

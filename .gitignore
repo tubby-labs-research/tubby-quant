@@ -28,6 +28,8 @@ cache/
 runs/
 results/
 alphalab/
+# The pattern above is for <data-root>/alphalab; keep the source package tracked.
+!qlib_yahoo/alphalab/
 sec/
 classifications/
 autoresearch-demo/
